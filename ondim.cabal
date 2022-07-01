@@ -1,0 +1,58 @@
+cabal-version:      2.4
+name:               ondim
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             Lucas V. R.
+maintainer:         lvr@s-viva.xyz
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+library
+  -- Modules included in this executable, other than Main.
+  -- other-modules:
+
+  -- LANGUAGE extensions used by modules in this package.
+  exposed-modules:  Ondim
+                    Ondim.Extra
+                    Ondim.HTML
+  build-depends:    base >= 4.14 && < 5
+                  , attoparsec
+                  , containers
+                  , map-syntax
+                  , mtl
+                  , xmlhtml
+                  , relude
+                  , replace-attoparsec
+                  , text
+  mixins:           base hiding (Prelude)
+                  , relude (Relude as Prelude)
+                  , relude
+  hs-source-dirs:   src
+  default-language: Haskell2010
+  ghc-options:     -Wall
+  default-extensions:
+    TupleSections
+    OverloadedStrings
+    ViewPatterns
+    ImportQualifiedPost
+    LambdaCase
+    GeneralizedNewtypeDeriving
+    FunctionalDependencies
+    ScopedTypeVariables
+    FlexibleContexts
+    BlockArguments
+    TypeFamilies
