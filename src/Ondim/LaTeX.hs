@@ -1,0 +1,3 @@
+-- |
+
+module Ondim.LaTeX where

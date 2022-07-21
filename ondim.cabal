@@ -29,13 +29,19 @@ library
   exposed-modules:  Ondim
                     Ondim.Extra
                     Ondim.HTML
+  other-modules:    Ondim.MultiState
+                    Ondim.HasSub
   build-depends:    base >= 4.14 && < 5
                   , attoparsec
                   , containers
+                  , HaTeX
                   , map-syntax
                   , mtl
+                  , multistate
                   , xmlhtml
                   , relude
+                  , pandoc-types
+                  , neat-interpolation
                   , replace-attoparsec
                   , text
   mixins:           base hiding (Prelude)
@@ -43,16 +49,26 @@ library
                   , relude
   hs-source-dirs:   src
   default-language: Haskell2010
-  ghc-options:     -Wall
+  ghc-options:     -Wall -fprint-potential-instances
   default-extensions:
     TupleSections
     OverloadedStrings
-    ViewPatterns
     ImportQualifiedPost
-    LambdaCase
     GeneralizedNewtypeDeriving
-    FunctionalDependencies
     ScopedTypeVariables
-    FlexibleContexts
     BlockArguments
+    ViewPatterns
+    DataKinds
+    TypeOperators
+    TypeApplications
+    DerivingStrategies
+    DeriveAnyClass
+    DeriveGeneric
+    MultiWayIf
+    DerivingVia
+    StandaloneDeriving
+    KindSignatures
     TypeFamilies
+    FlexibleContexts
+    FlexibleInstances
+    MultiParamTypeClasses

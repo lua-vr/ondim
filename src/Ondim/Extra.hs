@@ -1,93 +1,115 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 -- | Examples of expansions.
 
 module Ondim.Extra where
 import Ondim
-import Data.Tree
-import Relude.Extra.Map
 import Data.Map.Syntax
+import Data.List qualified as L
+import Data.Attoparsec.Text (Parser, string, takeTill, char)
+import Replace.Attoparsec.Text (streamEditT)
 
-class Textfiable t where
-  textify :: t -> Maybe Text
+-- Aliases for attributes
 
-instance Textfiable t => Textfiable (Tree t) where
-  textify = textify . rootLabel
+type Attribute = (Text, Text)
 
-instance Textfiable t => Textfiable [t] where
-  textify = foldMap textify
+type ExpansibleText = Text
 
+attributes :: forall t tag. (OndimTag tag, HasSub tag t Attribute) =>
+  Ondim tag t -> Ondim tag [Attribute]
+attributes = inhibitingExpansions . fmap (getSubs @tag)
 
--- The examples
+type HasAttrChild tag t = (OndimNode tag t, HasSub tag t t, HasSub tag t Attribute)
 
-silence :: Monad m => a -> OndimT t m [b]
-silence = const $ pure []
+-- Expansions
 
-ignore :: (Monad m, OndimNode t) => Expansions' m t
-ignore = "ignore" ## silence
+ignore :: forall t tag. OndimTag tag => Expansion tag t
+ignore = const $ pure []
 
-ifElse :: (Monad m, OndimNode t) => Bool -> Expansion m t
-ifElse cond oel = do
-  els <- children <$> oel
-  let (ifEls, drop 1 -> elseEls) =
-        break ((Just "else" ==) . identify . rootLabel) els
+ifElse :: forall tag t.
+  (OndimNode tag t, HasSub tag t t) =>
+  Bool -> Expansion tag t
+ifElse cond node = do
+  els <- inhibitingExpansions $ children node
+  let (yes, drop 1 -> no) =
+        break ((Just "else" ==) . identify @tag) els
   if cond
-    then pure ifEls
-    else pure elseEls
+    then foldMapM liftNode yes
+    else foldMapM liftNode no
 
-ifElseBound :: (Monad m, OndimNode t) => Expansions' m t
-ifElseBound = "if-bound" ## ifBoundExpansion
-
-switchCases :: (Monad m, OndimNode t) => Text -> Expansions' m t
+switchCases :: forall t tag. HasAttrChild tag t => Text -> Expansions' tag t
 switchCases tag = do
   "case" ## \caseNode -> do
-    node'@(children -> els') <- caseNode
-    let attrs = attributes node'
-    if tag `member` attrs || Just tag == lookup "tag" attrs
-    then pure els'
+    attrs <- attributes caseNode
+    if isJust (L.lookup tag attrs) || Just tag == L.lookup "tag" attrs
+    then children caseNode
     else pure []
+{-# INLINABLE switchCases #-}
 
-switch :: (Monad m, OndimNode t) =>
-  Text -> Expansion m t
-switch tag = runChildrenWith' (switchCases tag)
+switch :: forall tag t. (HasAttrChild tag t) =>
+  Text -> Expansion tag t
+switch tag node = children node
+  `binding` switchCases @t tag
 
-switchWithDefault :: forall m t.
-  Monad m =>
-  (OndimNode t) =>
-  Text -> Expansion m t
-switchWithDefault tag oel = do
-  els <- children <$> oel
-  pure $ fromMaybe [] $ fmap subForest $
-    find (\n@(Node x _) -> nameIs "case" x && hasTag n) els <|>
-    find (\  (Node x _) -> nameIs "default" x) els
+switchWithDefault :: forall tag t. (HasAttrChild tag t) =>
+  Text -> Expansion tag t
+switchWithDefault tag node = do
+  els <- inhibitingExpansions $ children node
+  fromMaybe (pure []) do
+    child <- find (\x -> nameIs "case" x && hasTag x) els <|>
+             find (\x -> nameIs "default" x) els
+    pure $ foldMapM liftNode (getSubs @tag child)
   where
-    nameIs n x = identify x == Just n
-    hasTag (attributes -> attrs) = tag `member` attrs || Just tag == lookup "tag" attrs
-
-switchBound :: Monad m =>
-  (OndimNode t, Textfiable t, HasEmpty t) =>
-  Expansions' m t
-switchBound = "switch" ## switchExpansion
+    nameIs n x = identify @tag x == Just n
+    hasTag (getSubs @tag -> attrs) =
+      isJust (L.lookup tag attrs) ||
+      Just tag == L.lookup "tag" attrs
 
 
 -- Implementations
 
-ifBoundExpansion :: (Monad m, OndimNode t) => Expansion m t
-ifBoundExpansion oel = do
-  node <- oel
-  let attrs = attributes node
-  bound <- case lookup "tag" attrs of
-    Just tag -> asksE (member (fromText tag))
+ifBound :: forall t tag.
+  HasAttrChild tag t => Expansion tag t
+ifBound node = do
+  attrs <- attributes node
+  bound <- case L.lookup "tag" attrs of
+    Just tag -> isJust <$> getExpansion @t tag
     Nothing -> pure False
-  ifElse bound (pure node)
+  ifElse bound node
 
-switchExpansion :: forall m t.
-  Monad m =>
-  (OndimNode t, Textfiable t, HasEmpty t) =>
-  Expansion m t
-switchExpansion oel = do
-  node@(children -> els) <- oel
-  let attrs = attributes node
-  fromMaybe els <$> runMaybeT do
-    tag <- hoistMaybe $ lookup "tag" attrs
-    tagE <- hoistMaybe =<< lift (asksE (lookup (fromText tag)))
-    tagC <- hoistMaybe =<< lift (textify <$> tagE (pure emptyNode))
-    lift $ switchWithDefault tagC oel
+switchBound :: forall t tag. HasAttrChild tag t => Expansion tag t
+switchBound node = do
+  tag <- L.lookup "tag" <$> attributes node
+  fromMaybe (children node) do
+    tagC <- callText @tag <$> tag
+    pure $ (`switchWithDefault` node) =<< tagC
+
+-- | This expansion works like Heist's `bind` splice
+bind :: forall t tag.
+  ( OndimNode tag t
+  , HasSub tag t t
+  , HasSub tag t Attribute
+  ) => Expansion tag t
+bind node = do
+  attrs <- attributes node
+  whenJust (L.lookup "tag" attrs) $ \tag -> do
+    putExpansion tag $ \inner ->
+      children node
+      `binding` do
+        "apply-content" ## const (children inner)
+  pure []
+
+-- Substitution of ${name} in attribute text
+
+interpParser :: Parser Text
+interpParser = do
+  _ <- string "${"
+  s <- takeTill (== '}')
+  _ <- char '}'
+  pure s
+
+attrEdit :: OndimTag tag => Text -> Ondim tag Text
+attrEdit = streamEditT interpParser callText
+
+expandAttr :: OndimTag tag => Expansion tag ExpansibleText
+expandAttr = fmap one . (attrEdit =<<)

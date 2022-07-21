@@ -1,169 +1,270 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
--- |
+-- | HTML implementation.
 
 module Ondim.HTML where
 import Ondim
-import Ondim.Extra
 import Text.XmlHtml qualified as X
-import Data.Tree
-import Data.Attoparsec.Text
-import Replace.Attoparsec.Text
-import Data.Map.Syntax ((##), runMap, mapV)
-import Relude.Extra.Map
+import Ondim.Extra
+import Data.Char (isSpace)
+import Data.Map.Syntax ((##))
+import qualified Data.List as L
+import qualified Data.Text as T
 
-data HTMLNode
-  = Element Text
-  | Attribute Text
-  | AttributeValue Text -- To support attribute content expansion
-  | Content Text
-  | RawContent Text
-  | Comment Text
-  | Empty
-  deriving (Eq, Ord, Show)
+{- | Ondim HTML tag. (Used for instances).
+-}
+data HtmlTag (m :: Type -> Type)
 
-type OndimHtmlT m a = OndimT HTMLNode m a
+{- | We use a new XML datatype so that we can group the node with the newline space
+   before it. This makes the output formatting much better.
+-}
+data HtmlNode
+  = Element {preNewline :: Bool, elementTag :: Text, elementAttrs :: [(Text, Text)], elementChildren :: [HtmlNode]}
+  | TextNode Text
+  deriving (Eq, Show, Generic)
 
-data HtmlId -- Type for custom equality
-  = Name Text
-  | IsAttributeValue
-  deriving (Eq, Ord, Show)
-
-instance IsString HtmlId where
-  fromString = Name . toText
-
-instance OndimNode HTMLNode where
-  type Identifier HTMLNode = HtmlId
-  identify (Element name) = Just (fromText name)
-  identify (Attribute name) = Just (fromText name)
-  identify AttributeValue {} = Just IsAttributeValue
-  identify Content {} = Nothing
-  identify RawContent {} = Nothing
-  identify Comment {} = Nothing
-  identify Empty = Nothing
-  children (Node _ c) = filter (p . rootLabel) c
-    where p Element {} = True
-          p Content {} = True
-          p RawContent {} = True
-          p Comment {} = True
-          p _ = False
-  attributes = fromList .
-               mapMaybe (fmap unAttr . attributeFromTree) .
-               subForest
-
-instance HasEmpty HTMLNode where
-  emptyValue = Empty
-
-instance Textfiable HTMLNode where
-  textify Element {} = Nothing
-  textify Attribute {} = Nothing
-  textify (AttributeValue t) = Just t
-  textify (Content t) = Just t
-  textify (RawContent t) = Just t
-  textify Comment {} = Nothing
-  textify Empty {} = Nothing
-
-leaf :: a -> Tree a
-leaf x = Node x []
-
-newtype Attribute = Attr { unAttr :: (Text, Text) }
-
-attributeToTree :: Attribute -> Tree HTMLNode
-attributeToTree (Attr (name, value)) =
-  Node (Attribute name) [leaf (AttributeValue value)]
-
-attributeFromTree :: Tree HTMLNode -> Maybe Attribute
-attributeFromTree (Node (Attribute name) values) = Just (Attr (name, value))
-  where value = mconcat $ mapMaybe getValue values
-        getValue (Node (AttributeValue v) _) = Just v
-        getValue _ = Nothing
-attributeFromTree _ = Nothing
-
-nodeToTree :: X.Node -> Tree HTMLNode
-nodeToTree (X.TextNode txt) = leaf (Content txt)
-nodeToTree (X.Comment txt) = leaf (Comment txt)
-nodeToTree (X.Element name attrs childs) =
-  Node (Element name) $
-    (attributeToTree . Attr <$> attrs) ++
-    (nodeToTree <$> childs)
-
-instance OndimRepr HTMLNode Attribute where
-  toTree = attributeToTree
-  fromTree = attributeFromTree
-
-type AttrExpansion m = OndimHtmlT m Attribute -> OndimHtmlT m [Attribute]
-
-type AttrExpansions m = ReprExpansions m HTMLNode Attribute
-
--- | A hack, unfortunately. I could not find a single HTML Haskell library
--- properly supporting raw content.
-rawNode :: Text -> X.Node
-rawNode txt = X.Element "TO-BE-REMOVED" [("xmlhtmlRaw", "")] [X.TextNode txt]
-
-nodeFromTree :: Tree HTMLNode -> Maybe X.Node
-nodeFromTree (Node (Content txt) _) = Just (X.TextNode txt)
-nodeFromTree (Node (Comment txt) _) = Just (X.Comment txt)
-nodeFromTree (Node (RawContent txt) _) = Just (rawNode txt)
-nodeFromTree (Node (Element name) sub) = Just (X.Element name attrs childs)
+{- | Convert from XmlHtml nodes to @HtmlNode@
+-}
+fromNodeList :: [X.Node] -> [HtmlNode]
+fromNodeList = foldr go [] . filter notEmpty
   where
-    attrs = mapMaybe (fmap unAttr . attributeFromTree) sub
-    childs = mapMaybe nodeFromTree sub
-nodeFromTree (Node (AttributeValue _) _) = Nothing
-nodeFromTree (Node (Attribute _) _) = Nothing
-nodeFromTree (Node Empty _) = Nothing
+    notEmpty (X.TextNode "") = False
+    notEmpty X.Comment {} = False
+    notEmpty _ = True
 
-instance OndimRepr HTMLNode X.Node where
-  toTree = nodeToTree
-  fromTree = nodeFromTree
+    go (X.TextNode t) (el@Element{} : xs)
+      | T.all isSpace t, T.any ('\n' ==) t =
+          el { preNewline = True } : xs
+    go (X.TextNode t) (TextNode t' : xs) = TextNode (t <> t') : xs
+    go (X.TextNode t) l = TextNode t : l
+    go (X.Element x y z) xs = Element False x y (fromNodeList z) : xs
+    go X.Comment{} xs = xs
 
-type NodeExpansion m = OndimHtmlT m X.Node -> OndimHtmlT m [X.Node]
+{- | Convert from @HtmlNode@ nodes to XmlHtml
+-}
+toNodeList :: [HtmlNode] -> [X.Node]
+toNodeList = foldMap go
+  where go (Element n a b c)
+          | n = [X.TextNode "\n", X.Element a b (toNodeList c)]
+          | otherwise = [X.Element a b (toNodeList c)]
+        go (TextNode t) = [X.TextNode t]
 
-type NodeExpansions m = ReprExpansions m HTMLNode X.Node
+{- | Concatenates all text inside the node.
+-}
+nodeText :: HtmlNode -> Text
+nodeText (TextNode t) = t
+nodeText el@Element{} = foldMap nodeText (elementChildren el)
+
+instance Monad m => OndimTag (HtmlTag m) where
+  type OndimTypes (HtmlTag m) = '[HtmlNode, Attribute, ExpansibleText]
+  type OndimMonad (HtmlTag m) = m
+
+instance Monad m => OndimNode (HtmlTag m) HtmlNode where
+  type ExpTypes HtmlNode = '[Attribute, HtmlNode]
+  identify (Element _ name _ _) = Just name
+  identify _ = Nothing
+  fromText = Just TextNode
+  validIdentifiers = Just validHtmlTags
+
+instance HasSub (HtmlTag m) HtmlNode Attribute
+instance HasSub (HtmlTag m) HtmlNode HtmlNode
+
+instance Monad m => OndimNode (HtmlTag m) ExpansibleText where
+  type ExpTypes ExpansibleText = '[]
+  identify _ = Just ""
+
+instance Monad m => OndimNode (HtmlTag m) Attribute where
+  type ExpTypes Attribute = '[ExpansibleText]
+  identify (t,_) = Just t
+  fromText = Just (,"")
+
+instance HasSub (HtmlTag m) Attribute ExpansibleText where
+  getSubs (_,t) = [t]
+  setSubs (k,_) (t:_) = (k, t)
+  setSubs x _ = x
+
+-- | A hack, unfortunately.
+rawNode :: Text -> HtmlNode
+rawNode txt = Element False "to-be-removed" [("xmlhtmlRaw", "")] [TextNode txt]
+
+bindDefaults :: forall m t. Monad m =>
+  Ondim (HtmlTag m) t -> Ondim (HtmlTag m) t
+bindDefaults st = st
+ `binding` do
+   "ignore" ## ignore @HtmlNode
+   "if-bound" ## ifBound
+   "switch" ## switchBound
+   "bind" ## bind
+   "bind-text" ## bindText
+  `binding` do
+    "" ## expandAttr
+
+bindText :: Monad m => Expansion (HtmlTag m) HtmlNode
+bindText node = do
+  attrs <- attributes node
+  whenJust (L.lookup "tag" attrs) $ \tag -> do
+    putTextExp tag $ nodeText <$> node
+  pure []
 
 -- * Template loading helpers
 
-fromDocument :: Monad m => X.Document -> Expansion m HTMLNode
-fromDocument doc = fromTemplate $ X.docContent doc
+fromDocument :: Monad m => X.Document -> Expansion (HtmlTag m) HtmlNode
+fromDocument = fromTemplate . fromNodeList . X.docContent
 
-expandDocument :: Monad m => X.Document -> OndimHtmlT m X.Document
+expandDocument :: Monad m => X.Document -> Ondim (HtmlTag m) X.Document
 expandDocument doc = do
-  forest <- sequence . fmap fromTree <$>
-            liftNodeForest (toTree <$> X.docContent doc)
-  pure $ maybe doc (\c -> doc { X.docContent = c }) forest
+  nodes <- foldMapM liftNode (fromNodeList $ X.docContent doc)
+  pure $ doc { X.docContent = toNodeList nodes }
 
--- * Substitution of ${name} in attribute text
+-- * Valid html tags
 
-newtype AttrValue = AttrValue Text
+{-
+  Array.from(document.querySelectorAll('tr > td:first-child > a > code'))
+       .map(e => e.textContent.slice(1,-1))
+       .join('\n')
 
-instance OndimRepr HTMLNode AttrValue where
-  toTree (AttrValue t) = leaf (AttributeValue t)
-  fromTree (Node (AttributeValue t) _) = Just (AttrValue t)
-  fromTree _ = Nothing
-
-interpParser :: Parser Text
-interpParser = do
-  _ <- string "${"
-  s <- takeTill (== '}')
-  _ <- char '}'
-  pure s
-
-interpEditor :: Monad m => Text -> OndimHtmlT m Text
-interpEditor t = do
-  fromMaybe t <$> runMaybeT do
-    expansion <- hoistMaybe =<< lift (asksE (lookup (Name t)))
-    content <- hoistMaybe =<< lift (textify <$> expansion (pure emptyNode))
-    pure content
-
-attrInterpolationExp :: Monad m => ReprExpansions m HTMLNode AttrValue
-attrInterpolationExp =
-  IsAttributeValue ## \attr -> do
-    AttrValue t <- attr
-    one . AttrValue <$>
-      streamEditT interpParser interpEditor t
-
-defaultExpansions :: Monad m => Expansions m HTMLNode
-defaultExpansions =
-  fromRight mempty $ runMap $ do
-    mapV fromReprExpansion attrInterpolationExp
-    ignore
-    switchBound
-    ifElseBound
+-}
+{- | Valid HTML5 tags, scraped from
+   <https://developer.mozilla.org/en-US/docs/Web/HTML/Element>.
+-}
+validHtmlTags :: [Text]
+validHtmlTags =
+  [ "html"
+  , "base"
+  , "head"
+  , "link"
+  , "meta"
+  , "style"
+  , "title"
+  , "body"
+  , "address"
+  , "article"
+  , "aside"
+  , "footer"
+  , "header"
+  , "h1"
+  , "h2"
+  , "h3"
+  , "h4"
+  , "h5"
+  , "h6"
+  , "main"
+  , "nav"
+  , "section"
+  , "blockquote"
+  , "dd"
+  , "div"
+  , "dl"
+  , "dt"
+  , "figcaption"
+  , "figure"
+  , "hr"
+  , "li"
+  , "menu"
+  , "ol"
+  , "p"
+  , "pre"
+  , "ul"
+  , "a"
+  , "abbr"
+  , "b"
+  , "bdi"
+  , "bdo"
+  , "br"
+  , "cite"
+  , "code"
+  , "data"
+  , "dfn"
+  , "em"
+  , "i"
+  , "kbd"
+  , "mark"
+  , "q"
+  , "rp"
+  , "rt"
+  , "ruby"
+  , "s"
+  , "samp"
+  , "small"
+  , "span"
+  , "strong"
+  , "sub"
+  , "sup"
+  , "time"
+  , "u"
+  , "var"
+  , "wbr"
+  , "area"
+  , "audio"
+  , "img"
+  , "map"
+  , "track"
+  , "video"
+  , "embed"
+  , "iframe"
+  , "object"
+  , "picture"
+  , "portal"
+  , "source"
+  , "svg"
+  , "canvas"
+  , "noscript"
+  , "script"
+  , "del"
+  , "ins"
+  , "caption"
+  , "col"
+  , "colgroup"
+  , "table"
+  , "tbody"
+  , "td"
+  , "tfoot"
+  , "th"
+  , "thead"
+  , "tr"
+  , "button"
+  , "datalist"
+  , "fieldset"
+  , "form"
+  , "input"
+  , "label"
+  , "legend"
+  , "meter"
+  , "optgroup"
+  , "option"
+  , "output"
+  , "progress"
+  , "select"
+  , "textarea"
+  , "details"
+  , "dialog"
+  , "summary"
+  , "slot"
+  , "template"
+  , "acronym"
+  , "applet"
+  , "bgsound"
+  , "big"
+  , "blink"
+  , "center"
+  , "content"
+  , "dir"
+  , "font"
+  , "frame"
+  , "frameset"
+  , "hgroup"
+  , "image"
+  , "keygen"
+  , "marquee"
+  , "menuitem"
+  , "nobr"
+  , "noembed"
+  , "noframes"
+  , "param"
+  , "plaintext"
+  , "rb"
+  , "rtc"
+  , "shadow"
+  , "spacer"
+  , "strike"
+  , "tt"
+  , "xmp"
+  ]
