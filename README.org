@@ -2,7 +2,7 @@
 
 #+html: <img src="https://upload.wikimedia.org/wikipedia/commons/0/0d/An_alphabet_of_celebrities_-_U.jpg" align="right" width="30%">
 
-Ondim is a library for creating templating engines generically, inspired by Heist. It also includes HTML, Pandoc, JSON[fn::todo] and LaTeX[fn::LaTeX is also todo] examples that work out-of-the-box. 
+Ondim is a library for creating templating engines generically, inspired by Heist. It also includes HTML, Pandoc and LaTeX[fn:1] examples that work out-of-the-box. 
 
 The main idea is to reuse existing libraries that will provide the parser and the language's syntax, and easily build an "expansion" layer on top. If you are familiar with Heist, for HTML this is done by binding /named expansions/ (in Heist they are called Splices) that programatically transform the contents of HTML elements whose tags match the name.
 
@@ -19,7 +19,7 @@ ifElse cond node = do
     else foldMapM liftNode no
 #+end_src
 
-Now, suppose you have a value ~isCat :: Bool~ and you want your templates to choose between two HTML snippets depending on this value. If you bind ~ifElse isCat~ to the name ~"if-cat"~,
+Now, suppose you have a value ~isCat :: Bool~ and you want your templates to choose between two HTML snippets depending on this value. If you bind ~ifElse isCat~ to the name ~if-cat~,
 
 #+begin_src haskell
 {- other code -}
@@ -39,14 +39,16 @@ you can now write in your HTML templates:
 
 The beauty of ondim (and one aspect that takes it further from Heist) is that the ~ifElse~ splice is polymorphic on the format type, so we are not restricted to HTML. In a Pandoc backend, the same template could be written as:
 #+begin_src markdown
-:::: {#e:if-cat}
+:::: {#if-cat}
 I have a _beautiful_ cat!
 
-::: {#e:else}
+::: {#else}
 :::
 I don't have a cat :sob:
 ::::
 #+end_src
-This is written in plain Pandoc markdown, and meant to be parsed by the Pandoc reader itself. Note that instead of HTML tags, now we annotate the expansions with fenced divs and fenced spans (=this is [a fenced span]{#e:my-expansion}=).
+This is written in plain Pandoc markdown, and meant to be parsed by the Pandoc reader itself. Note that instead of HTML tags, now we annotate the expansions with fenced divs and fenced spans (=this is [a fenced span]{#my-expansion}=).
 
 But HTML and Pandoc are just examples, each defined in just ~100 LOC in =Ondim.HTML= and =Ondim.Pandoc=. And in the latter, most of it is instantiating default Generic instances. Ondim makes it easy to define you own!
+
+[fn:1] LaTeX is todo

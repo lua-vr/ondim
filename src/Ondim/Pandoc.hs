@@ -29,7 +29,7 @@ instance Monad m => OndimNode (PandocTag m) Block where
      , Attr
      , ExpansibleText
      ]
-  identify (Div (T.stripPrefix "e:" -> Just n,_,_) _) = Just n
+  identify (Div (n,_,_) _) = Just n
   identify _ = Nothing
   validIdentifiers = Just []
 
@@ -43,7 +43,7 @@ deriving via (OneSub ExpansibleText) instance HasSub (PandocTag m) Block Expansi
 
 instance Monad m => OndimNode (PandocTag m) Inline where
   type ExpTypes Inline = '[Inline, Block, Attr, ExpansibleText]
-  identify (Span (T.stripPrefix "e:" -> Just n,_,_) _) = Just n
+  identify (Span (n,_,_) _) = Just n
   identify _ = Nothing
   fromText = Just Str
   validIdentifiers = Just []
