@@ -74,7 +74,6 @@ instance HasSub (PandocTag m) Attr Attribute where
 -- TODO: can these instances be derived via automatically?
 instance Monad m => OndimNode (PandocTag m) ExpansibleText where
   type ExpTypes ExpansibleText = '[]
-  identify _ = Just ""
 
 instance Monad m => OndimNode (PandocTag m) Attribute where
   type ExpTypes Attribute = '[ExpansibleText]

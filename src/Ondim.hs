@@ -11,6 +11,8 @@ module Ondim
   , OndimNode (..)
   , Expansion
   , Expansions
+  , Filter
+  , Filters
   , OndimGS (..)
   , initialOGS
   , OndimS (..)
@@ -26,11 +28,17 @@ module Ondim
   , getExpansion
   , liftNode
   , withExpansions
+  , withFilters
   , withText
+  , withoutExpansion
+  , withoutFilter
+  , withoutText
   , putExpansion
   , putTextExp
   , Expansions'
+  , Filters'
   , binding
+  , bindingFilters
   , bindingText
   , fromTemplate
   , callExpansion
@@ -43,7 +51,7 @@ import Control.Monad.Trans.MultiState.Strict (runMultiStateTA, mGet, MultiStateT
 import Ondim.MultiState (All, mGets, mModify, withMultiStateT)
 import Data.HList.ContainsType (ContainsType)
 import Data.HList.HList (HList (..))
-import Relude.Extra.Map (insert, lookup)
+import Relude.Extra.Map (insert, lookup, delete)
 import Data.Map.Syntax ((##), runMap, MapSyntax)
 import Ondim.HasSub
 
@@ -89,6 +97,9 @@ instance
 type Expansion tag t = Ondim tag t -> Ondim tag [t]
 type Expansions tag t = Map Text (Expansion tag t)
 
+type Filter tag t = Ondim tag t -> Ondim tag t
+type Filters tag t = Map Text (Filter tag t)
+
 {- | Ondim's global state
 -}
 data OndimGS tag = OndimGS
@@ -105,14 +116,18 @@ initialOGS = OndimGS 0 [] False mempty
 
 {- | Ondim's state (one for each type)
 -}
-newtype OndimS tag t = OndimS
+data OndimS tag t = OndimS
   { expansions :: Expansions tag t
+  -- ^ Named expansions
+  , filters :: Filters tag t
+  -- ^ Similar to expansions, but are always applied before the expansion (the
+  -- purpose of the name is just to facilitate binding/unbinding).
   }
 
 {- | Initial state
 -}
 initialOS :: OndimS tag t
-initialOS = OndimS mempty
+initialOS = OndimS mempty mempty
 
 type family MultiOndimS' tag (l :: [Type]) where
   MultiOndimS' tag '[] = '[]
@@ -263,6 +278,8 @@ liftNode ::
 liftNode node = do
   gst <- Ondim $ mGet @(OndimGS tag)
   st  <- Ondim $ mGet @(OndimS tag t)
+  let filter' = foldr (.) id (filters st)
+      liftedNode = filter' $ liftAllSub @(ExpTypes t) node
   if | inhibitExpansion gst -> pure (one node)
      | Just name <- identify @tag node ->
        if | expansionDepth gst >= 200 -> -- To avoid recursive expansions
@@ -280,19 +297,35 @@ liftNode node = do
           | otherwise -> one <$> liftedNode
       | otherwise -> one <$> liftedNode
   where
-    liftedNode = liftAllSub @(ExpTypes t) node
     expCtx name =
       withOndimGS
         (\s -> s { expansionDepth = expansionDepth s + 1
                  , expansionTrace = name : expansionTrace s })
+{-# INLINABLE liftNode #-}
 
 -- | "Bind" new expansions locally.
 withExpansions :: OndimNode tag t => Expansions tag t -> Ondim tag a -> Ondim tag a
 withExpansions exps = withOndimS (\s -> s {expansions = exps <> expansions s})
 
+-- | "Bind" filters locally.
+withFilters :: OndimNode tag t => Filters tag t -> Ondim tag a -> Ondim tag a
+withFilters filt = withOndimS (\s -> s {filters = filt <> filters s})
+
 -- | "Bind" text expansions locally.
 withText :: OndimTag tag => Map Text (Ondim tag Text) -> Ondim tag a -> Ondim tag a
 withText exps = withOndimGS (\s -> s {textExpansions = exps <> textExpansions s})
+
+-- | "Unbind" an expansion locally.
+withoutExpansion :: forall t tag a. OndimNode tag t => Text -> Ondim tag a -> Ondim tag a
+withoutExpansion name = withOndimS @t (\s -> s {expansions = delete name (expansions s)})
+
+-- | "Unbind" a filter locally.
+withoutFilter :: forall t tag a. OndimNode tag t => Text -> Ondim tag a -> Ondim tag a
+withoutFilter name = withOndimS @t (\s -> s {filters = delete name (filters s)})
+
+-- | "Unbind" a text expansion locally.
+withoutText :: OndimTag tag => Text -> Ondim tag a -> Ondim tag a
+withoutText name = withOndimGS (\s -> s {textExpansions = delete name (textExpansions s)})
 
 -- | Put a new expansion into the local state, modifying the scope.
 putExpansion :: OndimNode tag t => Text -> Expansion tag t -> Ondim tag ()
@@ -305,11 +338,17 @@ putTextExp key exps =
   Ondim $ mModify (\s -> s {textExpansions = insert key exps (textExpansions s)})
 
 type Expansions' m t = MapSyntax Text (Expansion m t)
+type Filters' m t = MapSyntax Text (Filter m t)
 
 -- | Convenience function to bind using MapSyntax.
 binding :: OndimNode tag t =>
   Ondim tag a -> Expansions' tag t -> Ondim tag a
 binding o exps = withExpansions (fromRight mempty (runMap exps)) o
+
+-- | Convenience function to bind using MapSyntax.
+bindingFilters :: OndimNode tag t =>
+  Ondim tag a -> Filters' tag t -> Ondim tag a
+bindingFilters o filts = withFilters (fromRight mempty (runMap filts)) o
 
 -- | Convenience function to bind using MapSyntax.
 bindingText :: OndimTag tag =>

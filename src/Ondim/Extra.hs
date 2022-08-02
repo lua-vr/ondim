@@ -36,14 +36,16 @@ ifElse cond node = do
   if cond
     then foldMapM liftNode yes
     else foldMapM liftNode no
+{-# INLINABLE ifElse #-}
 
 switchCases :: forall t tag. HasAttrChild tag t => Text -> Expansions' tag t
-switchCases tag = do
+switchCases tag =
   "case" ## \caseNode -> do
     attrs <- attributes caseNode
-    if isJust (L.lookup tag attrs) || Just tag == L.lookup "tag" attrs
-    then children caseNode
-    else pure []
+    withoutExpansion @t "case" $
+      if isJust (L.lookup tag attrs) || Just tag == L.lookup "tag" attrs
+        then children caseNode
+        else pure []
 {-# INLINABLE switchCases #-}
 
 switch :: forall tag t. (HasAttrChild tag t) =>
@@ -65,11 +67,7 @@ switchWithDefault tag node = do
       isJust (L.lookup tag attrs) ||
       Just tag == L.lookup "tag" attrs
 
-
--- Implementations
-
-ifBound :: forall t tag.
-  HasAttrChild tag t => Expansion tag t
+ifBound :: forall t tag. HasAttrChild tag t => Expansion tag t
 ifBound node = do
   attrs <- attributes node
   bound <- case L.lookup "tag" attrs of
@@ -111,5 +109,5 @@ interpParser = do
 attrEdit :: OndimTag tag => Text -> Ondim tag Text
 attrEdit = streamEditT interpParser callText
 
-expandAttr :: OndimTag tag => Expansion tag ExpansibleText
-expandAttr = fmap one . (attrEdit =<<)
+attrSub :: OndimTag tag => Filter tag ExpansibleText
+attrSub = (attrEdit =<<)

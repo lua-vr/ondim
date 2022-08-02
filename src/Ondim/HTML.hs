@@ -69,7 +69,6 @@ instance HasSub (HtmlTag m) HtmlNode HtmlNode
 
 instance Monad m => OndimNode (HtmlTag m) ExpansibleText where
   type ExpTypes ExpansibleText = '[]
-  identify _ = Just ""
 
 instance Monad m => OndimNode (HtmlTag m) Attribute where
   type ExpTypes Attribute = '[ExpansibleText]
@@ -94,8 +93,8 @@ bindDefaults st = st
    "switch" ## switchBound
    "bind" ## bind
    "bind-text" ## bindText
-  `binding` do
-    "" ## expandAttr
+  `bindingFilters` do
+    "attrSub" ## attrSub
 
 bindText :: Monad m => Expansion (HtmlTag m) HtmlNode
 bindText node = do
