@@ -2,7 +2,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE PolyKinds #-}
 
 module Ondim
   ( OndimTag (..)
