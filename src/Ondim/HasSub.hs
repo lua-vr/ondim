@@ -20,9 +20,21 @@ instance HasSub tag [t] t
 newtype OneSub a = OneSub a
   deriving Generic
 
-instance (Generic t, HasSub' s (Rep t), ContainsSome s (Rep t), Monoid s) => HasSub tag t (OneSub s) where
+instance (Generic t, HasSub' s (Rep t), ContainsSome s (Rep t)
+         , Monoid s
+         ) => HasSub tag t (OneSub s) where
   getSubs = one . coerce @s . getSubs' . from
   setSubs x s = to $ setSubs' (from x) $ (mconcat (coerce @[OneSub s] @[s] s))
+
+newtype NestedSub (b :: Type) a = NestedSub a
+  deriving Generic
+
+instance (Generic t, HasSub' u (Rep t), ContainsSome u (Rep t)
+         , HasSub tag u s
+         ) => HasSub tag t (NestedSub u s) where
+  getSubs = coerce . getSubs @tag @u @s . getSubs' . from
+  setSubs x s =
+    to $ setSubs' (from x) $ (setSubs @tag @u @s (getSubs' $ from x) (coerce s))
 
 class HasSub' s t where
   getSubs' :: t p -> s

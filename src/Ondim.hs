@@ -7,6 +7,7 @@ module Ondim
   ( OndimTag (..)
   , HasSub (..)
   , OneSub (..)
+  , NestedSub (..)
   , children
   , OndimNode (..)
   , Expansion
