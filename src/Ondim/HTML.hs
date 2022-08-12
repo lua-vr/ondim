@@ -110,7 +110,7 @@ fromDocument = fromTemplate . fromNodeList . X.docContent
 
 expandDocument :: Monad m => X.Document -> Ondim (HtmlTag m) X.Document
 expandDocument doc = do
-  nodes <- foldMapM liftNode (fromNodeList $ X.docContent doc)
+  nodes <- liftNodes (fromNodeList $ X.docContent doc)
   pure $ doc { X.docContent = toNodeList nodes }
 
 -- * Valid html tags

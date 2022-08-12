@@ -64,7 +64,6 @@ library
     DerivingStrategies
     DeriveAnyClass
     DeriveGeneric
-    MultiWayIf
     DerivingVia
     StandaloneDeriving
     KindSignatures

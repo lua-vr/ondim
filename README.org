@@ -15,8 +15,8 @@ ifElse cond node = do
   let (yes, drop 1 -> no) =
         break ((Just "else" ==) . identify @tag) els
   if cond
-    then foldMapM liftNode yes
-    else foldMapM liftNode no
+    then liftNodes yes
+    else liftNodes no
 #+end_src
 
 Now, suppose you have a value ~isCat :: Bool~ and you want your templates to choose between two HTML snippets depending on this value. If you bind ~ifElse isCat~ to the name ~if-cat~,

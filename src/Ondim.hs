@@ -28,6 +28,7 @@ module Ondim
   , withOndimS
   , getExpansion
   , liftNode
+  , liftNodes
   , withExpansions
   , withFilters
   , withText
@@ -98,7 +99,7 @@ instance
 type Expansion tag t = Ondim tag t -> Ondim tag [t]
 type Expansions tag t = Map Text (Expansion tag t)
 
-type Filter tag t = Ondim tag t -> Ondim tag t
+type Filter tag t = Ondim tag [t] -> Ondim tag [t]
 type Filters tag t = Map Text (Filter tag t)
 
 {- | Ondim's global state
@@ -121,7 +122,7 @@ data OndimS tag t = OndimS
   { expansions :: Expansions tag t
   -- ^ Named expansions
   , filters :: Filters tag t
-  -- ^ Similar to expansions, but are always applied before the expansion (the
+  -- ^ Similar to expansions, but are always applied after the expansion (the
   -- purpose of the name is just to facilitate binding/unbinding).
   }
 
@@ -229,8 +230,7 @@ liftSub ::
   ) =>
   t -> Ondim tag t
 liftSub node =
-  let child = withOndimGS id $
-        foldMapM (liftNode @tag) (getSubs @tag @t @s node)
+  let child = withOndimGS id $ liftNodes (getSubs @tag @t @s node)
   in setSubs @tag node <$> child
 {-# INLINABLE liftSub #-}
 
@@ -279,30 +279,45 @@ liftNode ::
 liftNode node = do
   gst <- Ondim $ mGet @(OndimGS tag)
   st  <- Ondim $ mGet @(OndimS tag t)
-  let filter' = foldr (.) id (filters st)
-      liftedNode = filter' $ liftAllSub @(ExpTypes t) node
-  if | inhibitExpansion gst -> pure (one node)
-     | Just name <- identify @tag node ->
-       if | expansionDepth gst >= 200 -> -- To avoid recursive expansions
-              throwError (MaxExpansionDepthExceeded $ expansionTrace gst)
-          | Just expansion <- lookup name (expansions st) ->
-              expansion $
-                expCtx name $
-                  liftedNode
-          | Just fT <- fromText @tag,
-            Just text <- lookup name (textExpansions gst) ->
+  -- let filter' = foldr (.) id (filters st)
+  if inhibitExpansion gst
+    then pure (one node)
+    else case identify @tag node of
+      Just name
+        | expansionDepth gst >= 200 ->
+            -- To avoid recursive expansions
+            throwError (MaxExpansionDepthExceeded $ expansionTrace gst)
+        | Just expansion <- lookup name (expansions st) ->
+            expansion $
               expCtx name $
-                one . fT <$> text
-          | Just valid <- validIdentifiers @tag @t,
-            name `notElem` valid -> throwNotBound name
-          | otherwise -> one <$> liftedNode
-      | otherwise -> one <$> liftedNode
+                liftedNode
+        | Just fT <- fromText @tag,
+          Just text <- lookup name (textExpansions gst) ->
+            expCtx name $
+              one . fT <$> text
+        | Just valid <- validIdentifiers @tag @t,
+          name `notElem` valid ->
+            throwNotBound name
+      _ -> one <$> liftedNode
   where
+    liftedNode = liftAllSub @(ExpTypes t) node
     expCtx name =
       withOndimGS
         (\s -> s { expansionDepth = expansionDepth s + 1
                  , expansionTrace = name : expansionTrace s })
 {-# INLINABLE liftNode #-}
+
+liftNodes ::
+  forall tag t.
+  ( ContainsOndimS tag t
+  , OndimNode tag t
+  , LiftAllSub (ExpTypes t)
+  ) =>
+  [t] -> Ondim tag [t]
+liftNodes nodes = do
+  st <- Ondim $ mGet @(OndimS tag t)
+  foldr (.) id (filters st) $
+    foldMapM (liftNode @tag) nodes
 
 -- | "Bind" new expansions locally.
 withExpansions :: OndimNode tag t => Expansions tag t -> Ondim tag a -> Ondim tag a
@@ -360,7 +375,7 @@ fromTemplate :: forall tag t.
   (OndimNode tag t, LiftAllSub (ExpTypes t), HasSub tag t t) =>
   [t] -> Expansion tag t
 fromTemplate tpl inner =
-  foldMapM liftNode tpl `binding` do
+  liftNodes tpl `binding` do
     "apply-content" ## const (children inner)
 
 {- | Either applies expansion 'name', or throws an error if it does not exist.

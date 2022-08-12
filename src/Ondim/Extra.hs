@@ -34,8 +34,8 @@ ifElse cond node = do
   let (yes, drop 1 -> no) =
         break ((Just "else" ==) . identify @tag) els
   if cond
-    then foldMapM liftNode yes
-    else foldMapM liftNode no
+    then liftNodes yes
+    else liftNodes no
 {-# INLINABLE ifElse #-}
 
 switchCases :: forall t tag. HasAttrChild tag t => Text -> Expansions' tag t
@@ -60,7 +60,7 @@ switchWithDefault tag node = do
   fromMaybe (pure []) do
     child <- find (\x -> nameIs "case" x && hasTag x) els <|>
              find (\x -> nameIs "default" x) els
-    pure $ foldMapM liftNode (getSubs @tag child)
+    pure $ liftNodes (getSubs @tag child)
   where
     nameIs n x = identify @tag x == Just n
     hasTag (getSubs @tag -> attrs) =
@@ -110,4 +110,4 @@ attrEdit :: OndimTag tag => Text -> Ondim tag Text
 attrEdit = streamEditT interpParser callText
 
 attrSub :: OndimTag tag => Filter tag ExpansibleText
-attrSub = (attrEdit =<<)
+attrSub = (mapM attrEdit =<<)
