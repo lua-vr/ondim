@@ -38,12 +38,15 @@ ifElse cond node = do
     else liftNodes no
 {-# INLINABLE ifElse #-}
 
+getTag :: [Attribute] -> Maybe Text
+getTag attrs = L.lookup "tag" attrs <|> (case attrs of [(s,"")] -> Just s; _ -> Nothing)
+
 switchCases :: forall t tag. HasAttrChild tag t => Text -> Expansions' tag t
 switchCases tag =
   "case" ## \caseNode -> do
     attrs <- attributes caseNode
     withoutExpansion @t "case" $
-      if isJust (L.lookup tag attrs) || Just tag == L.lookup "tag" attrs
+      if Just tag == getTag attrs
         then children caseNode
         else pure []
 {-# INLINABLE switchCases #-}
@@ -64,37 +67,43 @@ switchWithDefault tag node = do
   where
     nameIs n x = identify @tag x == Just n
     hasTag (getSubs @tag -> attrs) =
-      isJust (L.lookup tag attrs) ||
-      Just tag == L.lookup "tag" attrs
+      Just tag == getTag attrs
 
 ifBound :: forall t tag. HasAttrChild tag t => Expansion tag t
 ifBound node = do
   attrs <- attributes node
-  bound <- case L.lookup "tag" attrs of
+  bound <- case getTag attrs of
     Just tag -> isJust <$> getExpansion @t tag
     Nothing -> pure False
   ifElse bound node
 
 switchBound :: forall t tag. HasAttrChild tag t => Expansion tag t
 switchBound node = do
-  tag <- L.lookup "tag" <$> attributes node
+  tag <- getTag <$> attributes node
   fromMaybe (children node) do
     tagC <- callText @tag <$> tag
     pure $ (`switchWithDefault` node) =<< tagC
 
+-- Binding
+
 -- | This expansion works like Heist's `bind` splice
-bind :: forall t tag.
-  ( OndimNode tag t
-  , HasSub tag t t
-  , HasSub tag t Attribute
-  ) => Expansion tag t
+bind :: forall t tag. HasAttrChild tag t => Expansion tag t
 bind node = do
   attrs <- attributes node
-  whenJust (L.lookup "tag" attrs) $ \tag -> do
+  whenJust (getTag attrs) $ \tag -> do
     putExpansion tag $ \inner ->
       children node
       `binding` do
         "apply-content" ## const (children inner)
+  pure []
+
+bindText ::
+  (OndimTag tag, HasSub tag t Attribute) =>
+  (t -> Text) -> Expansion tag t
+bindText toTxt node = do
+  attrs <- attributes node
+  whenJust (getTag attrs) $ \tag -> do
+    putTextExp tag $ toTxt <$> node
   pure []
 
 -- Substitution of ${name} in attribute text

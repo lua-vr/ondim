@@ -21,6 +21,7 @@ module Ondim
   , OndimException (..)
   , throwNotBound
   , Ondim
+  , ContainsOndimS
   , liftO
   , runOndimT
   , withOndimGS
@@ -83,18 +84,6 @@ class
   fromText = Nothing
   validIdentifiers :: Maybe [Text]
   validIdentifiers = Nothing
-
-instance
-  ( HasSub tag [t] t
-  , ContainsOndimS tag [t]
-  , ContainsType [t] (OndimTypes tag)
-  , OndimNode tag t
-  ) => OndimNode tag [t] where
-  type ExpTypes [t] = '[t]
-  identify (x : _) = identify @tag x
-  identify _ = Nothing
-  fromText = (one .) <$> fromText @tag
-  validIdentifiers = validIdentifiers @tag @t
 
 type Expansion tag t = Ondim tag t -> Ondim tag [t]
 type Expansions tag t = Map Text (Expansion tag t)

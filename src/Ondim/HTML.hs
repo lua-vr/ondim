@@ -6,7 +6,6 @@ import Text.XmlHtml qualified as X
 import Ondim.Extra
 import Data.Char (isSpace)
 import Data.Map.Syntax ((##))
-import qualified Data.List as L
 import qualified Data.Text as T
 
 {- | Ondim HTML tag. (Used for instances).
@@ -92,16 +91,9 @@ bindDefaults st = st
    "if-bound" ## ifBound
    "switch" ## switchBound
    "bind" ## bind
-   "bind-text" ## bindText
+   "bind-text" ## bindText nodeText
   `bindingFilters` do
     "attrSub" ## attrSub
-
-bindText :: Monad m => Expansion (HtmlTag m) HtmlNode
-bindText node = do
-  attrs <- attributes node
-  whenJust (L.lookup "tag" attrs) $ \tag -> do
-    putTextExp tag $ nodeText <$> node
-  pure []
 
 -- * Template loading helpers
 
