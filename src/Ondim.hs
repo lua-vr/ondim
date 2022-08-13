@@ -32,6 +32,7 @@ module Ondim
   , getExpansion
   , liftNode
   , liftNodes
+  , liftSubstructures
   , withExpansions
   , withFilters
   , withText
@@ -287,13 +288,14 @@ liftNode node = do
             throwNotBound name
       _ -> one <$> liftedNode
   where
-    liftedNode = liftAllSub @(ExpTypes t) node
+    liftedNode = liftSubstructures node
     expCtx name =
       withOndimGS
         (\s -> s { expansionDepth = expansionDepth s + 1
                  , expansionTrace = name : expansionTrace s })
 {-# INLINABLE liftNode #-}
 
+-- | Lift a list of nodes, applying filters.
 liftNodes ::
   forall tag t. OndimNode tag t =>
   [t] -> Ondim tag [t]
@@ -301,6 +303,10 @@ liftNodes nodes = do
   st <- Ondim $ mGet @(OndimS tag t)
   foldr (.) id (filters st) $
     foldMapM (liftNode @tag) nodes
+
+-- | Lift only the substructures of a node.
+liftSubstructures :: forall tag t. OndimNode tag t => t -> Ondim tag t
+liftSubstructures = liftAllSub @(ExpTypes t)
 
 -- | "Bind" new expansions locally.
 withExpansions :: OndimNode tag t => Expansions tag t -> Ondim tag a -> Ondim tag a
