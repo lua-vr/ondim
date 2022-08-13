@@ -6,6 +6,8 @@
 module Ondim.HasSub where
 import GHC.Generics
 import GHC.TypeLits (TypeError, ErrorMessage(..))
+import Relude.Extra (toPairs)
+import GHC.Exts (Item)
 
 class HasSub tag t s where
   getSubs :: t -> [s]
@@ -24,7 +26,7 @@ instance (Generic t, HasSub' s (Rep t), ContainsSome s (Rep t)
          , Monoid s
          ) => HasSub tag t (OneSub s) where
   getSubs = one . coerce @s . getSubs' . from
-  setSubs x s = to $ setSubs' (from x) $ (mconcat (coerce @[OneSub s] @[s] s))
+  setSubs x s = to $ setSubs' (from x) $ mconcat @s (coerce s)
 
 newtype NestedSub (b :: Type) a = NestedSub a
   deriving Generic
@@ -34,7 +36,18 @@ instance (Generic t, HasSub' u (Rep t), ContainsSome u (Rep t)
          ) => HasSub tag t (NestedSub u s) where
   getSubs = coerce . getSubs @tag @u @s . getSubs' . from
   setSubs x s =
-    to $ setSubs' (from x) $ (setSubs @tag @u @s (getSubs' $ from x) (coerce s))
+    to $ setSubs' (from x) $ setSubs @tag @u @s (getSubs' $ from x) (coerce s)
+
+newtype PairSub a k v = PairSub (k, v)
+  deriving Generic
+
+type MapSub k v = PairSub (Map k v) k v
+
+instance ( Generic t, HasSub' a (Rep t), ContainsSome a (Rep t)
+         , IsList a, Item a ~ (k, v)
+         ) => HasSub tag t (PairSub a k v) where
+  getSubs = coerce . toPairs . getSubs' @a . from
+  setSubs x s = to $ setSubs' (from x) $ fromList @a (coerce s)
 
 class HasSub' s t where
   getSubs' :: t p -> s
