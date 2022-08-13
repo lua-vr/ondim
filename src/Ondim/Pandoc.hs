@@ -70,6 +70,7 @@ instance Monad m => OndimNode (PandocTag m) Block where
      , ExpansibleText
      ]
   identify (Div (n,_,_) _) = Just n
+  identify (Header _ (n,_,_) _) = Just n
   identify _ = Nothing
   validIdentifiers = Just []
 
@@ -114,12 +115,11 @@ instance Monad m => OndimNode (PandocTag m) ExpansibleText where
 
 instance Monad m => OndimNode (PandocTag m) Attribute where
   type ExpTypes Attribute = '[ExpansibleText]
-  identify (t,_) = Just t
+  identify = Just . fst
 
 instance HasSub (PandocTag m) Attribute ExpansibleText where
   getSubs (_,t) = [t]
-  setSubs (k,_) (t:_) = (k, t)
-  setSubs x _ = x
+  setSubs (k,_) t = (k, mconcat t)
 
 bindDefaults :: forall m t. Monad m =>
   Ondim (PandocTag m) t -> Ondim (PandocTag m) t

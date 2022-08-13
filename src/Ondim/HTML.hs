@@ -72,12 +72,10 @@ instance Monad m => OndimNode (HtmlTag m) ExpansibleText where
 instance Monad m => OndimNode (HtmlTag m) Attribute where
   type ExpTypes Attribute = '[ExpansibleText]
   identify (t,_) = Just t
-  fromText = Just (,"")
 
 instance HasSub (HtmlTag m) Attribute ExpansibleText where
   getSubs (_,t) = [t]
-  setSubs (k,_) (t:_) = (k, t)
-  setSubs x _ = x
+  setSubs (k,_) t = (k, mconcat t)
 
 -- | A hack, unfortunately.
 rawNode :: Text -> HtmlNode
