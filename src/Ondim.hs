@@ -7,6 +7,8 @@ module Ondim
   ( OndimTag (..)
   , HasSub (..)
   , OneSub (..)
+  , PairSub (..)
+  , MapSub
   , NestedSub (..)
   , children
   , OndimNode (..)
@@ -259,11 +261,7 @@ instance
    be evaluated with the defined expansions.
 -}
 liftNode ::
-  forall tag t.
-  ( ContainsOndimS tag t
-  , OndimNode tag t
-  , LiftAllSub (ExpTypes t)
-  ) =>
+  forall tag t. OndimNode tag t =>
   t -> Ondim tag [t]
 liftNode node = do
   gst <- Ondim $ mGet @(OndimGS tag)
@@ -297,11 +295,7 @@ liftNode node = do
 {-# INLINABLE liftNode #-}
 
 liftNodes ::
-  forall tag t.
-  ( ContainsOndimS tag t
-  , OndimNode tag t
-  , LiftAllSub (ExpTypes t)
-  ) =>
+  forall tag t. OndimNode tag t =>
   [t] -> Ondim tag [t]
 liftNodes nodes = do
   st <- Ondim $ mGet @(OndimS tag t)
