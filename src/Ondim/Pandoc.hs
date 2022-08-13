@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-} -- Just because Pandoc.Meta has no IsList instance.
 module Ondim.Pandoc where
 import Ondim
 import Ondim.Extra
@@ -12,7 +13,10 @@ data PandocTag (m :: Type -> Type)
 
 instance Monad m => OndimTag (PandocTag m) where
   type OndimTypes (PandocTag m) =
-    '[ Inline
+    '[ Pandoc
+     , MetaValue
+     , (Text, MetaValue)
+     , Inline
      , [Inline]
      , Block
      , [Block]
@@ -28,6 +32,32 @@ instance
   , OndimNode (PandocTag m) t
   ) => OndimNode (PandocTag m) [t] where
   type ExpTypes [t] = '[t]
+
+instance Monad m => OndimNode (PandocTag m) Pandoc where
+  type ExpTypes Pandoc ='[(Text, MetaValue), Block]
+
+instance HasSub (PandocTag m) Pandoc Block
+deriving via (Map Text MetaValue) instance IsList Meta
+deriving via (PairSub Meta Text MetaValue) instance HasSub (PandocTag m) Pandoc (Text, MetaValue)
+
+instance Monad m => OndimNode (PandocTag m) (Text, MetaValue) where
+  type ExpTypes (Text, MetaValue) ='[ExpansibleText, MetaValue]
+  identify = Just . fst
+
+deriving via (OneSub Text) instance HasSub (PandocTag m) (Text, MetaValue) ExpansibleText
+instance HasSub (PandocTag m) (Text, MetaValue) MetaValue where
+  getSubs = one . snd
+  setSubs x y = second (\z -> fromMaybe z (viaNonEmpty head y)) x -- ugh :c
+
+instance Monad m => OndimNode (PandocTag m) MetaValue where
+  type ExpTypes MetaValue ='[(Text, MetaValue), MetaValue, ExpansibleText, Inline, Block]
+  fromText = Just MetaString
+
+instance HasSub (PandocTag m) MetaValue MetaValue
+instance HasSub (PandocTag m) MetaValue Inline
+instance HasSub (PandocTag m) MetaValue Block
+deriving via (MapSub Text MetaValue) instance HasSub (PandocTag m) MetaValue (Text, MetaValue)
+deriving via (OneSub Text) instance HasSub (PandocTag m) MetaValue ExpansibleText
 
 instance Monad m => OndimNode (PandocTag m) Block where
   type ExpTypes Block =
