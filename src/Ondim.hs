@@ -57,7 +57,7 @@ import Control.Monad.Trans.MultiState.Strict (runMultiStateTA, mGet, MultiStateT
 import Ondim.MultiState (All, mGets, mModify, withMultiStateT)
 import Data.HList.ContainsType (ContainsType)
 import Data.HList.HList (HList (..))
-import Relude.Extra.Map (insert, lookup, delete)
+import Relude.Extra.Map (insert, lookup, delete, keys)
 import Data.Map.Syntax ((##), runMap, MapSyntax)
 import Ondim.HasSub
 
@@ -275,14 +275,14 @@ liftNode node = do
         | expansionDepth gst >= 200 ->
             -- To avoid recursive expansions
             throwError (MaxExpansionDepthExceeded $ expansionTrace gst)
-        | Just expansion <- lookup name (expansions st) ->
-            expansion $
-              expCtx name $
-                liftedNode
         | Just fT <- fromText @tag,
           Just text <- lookup name (textExpansions gst) ->
             expCtx name $
               fT <$> text
+        | Just expansion <- lookup name (expansions st) ->
+            expansion $
+              expCtx name $
+                liftedNode
         | Just valid <- validIdentifiers @tag @t,
           name `notElem` valid ->
             throwNotBound name
@@ -310,7 +310,10 @@ liftSubstructures = liftAllSub @(ExpTypes t)
 
 -- | "Bind" new expansions locally.
 withExpansions :: OndimNode tag t => Expansions tag t -> Ondim tag a -> Ondim tag a
-withExpansions exps = withOndimS (\s -> s {expansions = exps <> expansions s})
+withExpansions exps =
+  withOndimGS (\s -> s {textExpansions = foldr delete (textExpansions s) names}) .
+  withOndimS (\s -> s {expansions = exps <> expansions s})
+  where names = keys exps
 
 -- | "Bind" filters locally.
 withFilters :: OndimNode tag t => Filters tag t -> Ondim tag a -> Ondim tag a
