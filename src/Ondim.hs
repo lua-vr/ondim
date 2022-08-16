@@ -83,7 +83,7 @@ class
   type ExpTypes t :: [Type]
   identify :: t -> Maybe Text
   identify _ = Nothing
-  fromText :: Maybe (Text -> t)
+  fromText :: Maybe (Text -> [t])
   fromText = Nothing
   validIdentifiers :: Maybe [Text]
   validIdentifiers = Nothing
@@ -282,7 +282,7 @@ liftNode node = do
         | Just fT <- fromText @tag,
           Just text <- lookup name (textExpansions gst) ->
             expCtx name $
-              one . fT <$> text
+              fT <$> text
         | Just valid <- validIdentifiers @tag @t,
           name `notElem` valid ->
             throwNotBound name

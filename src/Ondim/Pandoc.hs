@@ -51,7 +51,7 @@ instance HasSub (PandocTag m) (Text, MetaValue) MetaValue where
 
 instance Monad m => OndimNode (PandocTag m) MetaValue where
   type ExpTypes MetaValue ='[(Text, MetaValue), MetaValue, ExpansibleText, Inline, Block]
-  fromText = Just MetaString
+  fromText = Just (one . MetaString)
 
 instance HasSub (PandocTag m) MetaValue MetaValue
 instance HasSub (PandocTag m) MetaValue Inline
@@ -86,7 +86,7 @@ instance Monad m => OndimNode (PandocTag m) Inline where
   type ExpTypes Inline = '[Inline, Block, Attribute, ExpansibleText]
   identify (Span (n,_,_) _) = Just n
   identify _ = Nothing
-  fromText = Just Str
+  fromText = Just (toList . B.text)
   validIdentifiers = Just []
 
 instance HasSub (PandocTag m) Inline Inline

@@ -60,7 +60,7 @@ instance Monad m => OndimNode (HtmlTag m) HtmlNode where
   type ExpTypes HtmlNode = '[Attribute, HtmlNode]
   identify (Element _ name _ _) = Just name
   identify _ = Nothing
-  fromText = Just TextNode
+  fromText = Just (one . TextNode)
   validIdentifiers = Just validHtmlTags
 
 instance HasSub (HtmlTag m) HtmlNode Attribute
