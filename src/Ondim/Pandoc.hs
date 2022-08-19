@@ -8,8 +8,12 @@ import qualified Data.Text as T
 import Data.HList.ContainsType
 import Data.Map.Syntax ((##))
 import Text.Pandoc.Walk
+import qualified Text.Pandoc.Builder as B
 
 data PandocTag (m :: Type -> Type)
+
+getId :: [Text] -> Maybe Text
+getId = find (T.isPrefixOf "e:")
 
 instance Monad m => OndimTag (PandocTag m) where
   type OndimTypes (PandocTag m) =
@@ -69,8 +73,8 @@ instance Monad m => OndimNode (PandocTag m) Block where
      , Attribute
      , ExpansibleText
      ]
-  identify (Div (n,_,_) _) = Just n
-  identify (Header _ (n,_,_) _) = Just n
+  identify (Div (_,n,_) _) = getId n
+  identify (Header _ (_,n,_) _) = getId n
   identify _ = Nothing
   validIdentifiers = Just []
 
@@ -84,7 +88,7 @@ deriving via (OneSub ExpansibleText) instance HasSub (PandocTag m) Block Expansi
 
 instance Monad m => OndimNode (PandocTag m) Inline where
   type ExpTypes Inline = '[Inline, Block, Attribute, ExpansibleText]
-  identify (Span (n,_,_) _) = Just n
+  identify (Span (_,n,_) _) = getId n
   identify _ = Nothing
   fromText = Just (toList . B.text)
   validIdentifiers = Just []
@@ -103,7 +107,10 @@ instance HasSub (PandocTag m) ([Inline], [[Block]]) Inline
 instance HasSub (PandocTag m) ([Inline], [[Block]]) [Block]
 
 instance HasSub (PandocTag m) Attr Attribute where
-  getSubs (x,y,z) = ("id", x) : ("class", T.intercalate " " y) : z
+  getSubs (x,y,z) =
+    ("id", x) :
+    ("class", T.intercalate " " (filter (not . T.isPrefixOf "e:") y)) :
+    z
   setSubs _ = foldMap go
     where go ("id", a) = (a, [], [])
           go ("class", a) = ("", T.split (' ' ==) a, [])
