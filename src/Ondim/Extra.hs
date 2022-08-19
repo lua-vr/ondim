@@ -15,11 +15,16 @@ type Attribute = (Text, Text)
 
 type ExpansibleText = Text
 
-attributes :: forall t tag. (OndimTag tag, HasSub tag t Attribute) =>
+attributes :: forall t tag. (HasSub tag t Attribute, OndimNode tag Attribute) =>
   Ondim tag t -> Ondim tag [Attribute]
-attributes = inhibitingExpansions . fmap (getSubs @tag)
+attributes = liftNodes <=< inhibitingExpansions . (getSubs @tag <$>)
 
-type HasAttrChild tag t = (OndimNode tag t, HasSub tag t t, HasSub tag t Attribute)
+type HasAttrChild tag t =
+  ( OndimNode tag t
+  , OndimNode tag Attribute
+  , HasSub tag t t
+  , HasSub tag t Attribute
+  )
 
 -- Expansions
 
@@ -98,7 +103,7 @@ bind node = do
   pure []
 
 bindText ::
-  (OndimTag tag, HasSub tag t Attribute) =>
+  (OndimNode tag Attribute, HasSub tag t Attribute) =>
   (t -> Text) -> Expansion tag t
 bindText toTxt node = do
   attrs <- attributes node
