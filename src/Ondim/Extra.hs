@@ -111,13 +111,13 @@ bindText toTxt node = do
     putTextExp tag $ toTxt <$> node
   pure []
 
--- Substitution of ${name} in attribute text
+-- Substitution of !(name) in attribute text
 
 interpParser :: Parser Text
 interpParser = do
-  _ <- string "${"
-  s <- takeTill (== '}')
-  _ <- char '}'
+  _ <- string "!("
+  s <- takeTill (== ')')
+  _ <- char ')'
   pure s
 
 attrEdit :: OndimTag tag => Text -> Ondim tag Text
