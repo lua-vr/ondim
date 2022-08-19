@@ -53,8 +53,15 @@ nodeText (TextNode t) = t
 nodeText el@Element{} = foldMap nodeText (elementChildren el)
 
 instance Monad m => OndimTag (HtmlTag m) where
-  type OndimTypes (HtmlTag m) = '[HtmlNode, Attribute, ExpansibleText]
+  type OndimTypes (HtmlTag m) = '[X.Document,  HtmlNode, Attribute, ExpansibleText]
   type OndimMonad (HtmlTag m) = m
+
+instance Monad m => OndimNode (HtmlTag m) X.Document where
+  type ExpTypes X.Document = '[HtmlNode]
+
+instance HasSub (HtmlTag m) X.Document HtmlNode where
+  getSubs = fromNodeList . X.docContent
+  setSubs doc l = doc { X.docContent = toNodeList l }
 
 instance Monad m => OndimNode (HtmlTag m) HtmlNode where
   type ExpTypes HtmlNode = '[Attribute, HtmlNode]
@@ -97,11 +104,6 @@ bindDefaults st = st
 
 fromDocument :: Monad m => X.Document -> Expansion (HtmlTag m) HtmlNode
 fromDocument = fromTemplate . fromNodeList . X.docContent
-
-expandDocument :: Monad m => X.Document -> Ondim (HtmlTag m) X.Document
-expandDocument doc = do
-  nodes <- liftNodes (fromNodeList $ X.docContent doc)
-  pure $ doc { X.docContent = toNodeList nodes }
 
 -- * Valid html tags
 
