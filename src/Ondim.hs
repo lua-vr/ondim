@@ -197,6 +197,7 @@ withOndimGS :: (OndimTag tag) =>
   Ondim tag a ->
   Ondim tag a
 withOndimGS f = Ondim . withMultiStateT f . unOndimT
+{-# INLINABLE withOndimGS #-}
 
 inhibitingExpansions :: OndimTag tag => Ondim tag a -> Ondim tag a
 inhibitingExpansions = withOndimGS (\s -> s { inhibitExpansion = True })
@@ -289,11 +290,13 @@ liftNode node = do
       _ -> one <$> liftedNode
   where
     liftedNode = liftSubstructures node
-    expCtx name =
-      withOndimGS
-        (\s -> s { expansionDepth = expansionDepth s + 1
-                 , expansionTrace = name : expansionTrace s })
 {-# INLINABLE liftNode #-}
+
+expCtx :: OndimTag tag => Text -> Ondim tag a -> Ondim tag a
+expCtx name =
+  withOndimGS
+    (\s -> s { expansionDepth = expansionDepth s + 1
+             , expansionTrace = name : expansionTrace s })
 
 -- | Lift a list of nodes, applying filters.
 liftNodes ::
@@ -307,6 +310,7 @@ liftNodes nodes = do
 -- | Lift only the substructures of a node.
 liftSubstructures :: forall tag t. OndimNode tag t => t -> Ondim tag t
 liftSubstructures = liftAllSub @(ExpTypes t)
+{-# INLINABLE liftSubstructures #-}
 
 -- | "Bind" new expansions locally.
 withExpansions :: OndimNode tag t => Expansions tag t -> Ondim tag a -> Ondim tag a
@@ -373,13 +377,15 @@ fromTemplate tpl inner =
 {- | Either applies expansion 'name', or throws an error if it does not exist.
 -}
 callExpansion :: OndimNode tag t => Text -> Expansion tag t
-callExpansion name arg = do
-  exps <- getExpansion name
-  maybe (throwNotBound name) ($ arg) exps
+callExpansion name arg =
+  expCtx name $ do
+    exps <- getExpansion name
+    maybe (throwNotBound name) ($ arg) exps
 
 callText ::
   OndimTag tag =>
   Text -> Ondim tag Text
 callText k =
-  fromMaybe (throwNotBound k) =<<
-    Ondim (mGets \s -> lookup k (textExpansions s))
+  expCtx k $
+    fromMaybe (throwNotBound k) =<<
+      Ondim (mGets \s -> lookup k (textExpansions s))
