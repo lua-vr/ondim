@@ -132,12 +132,12 @@ bindDefaults :: forall m t. Monad m =>
   Ondim (PandocTag m) t -> Ondim (PandocTag m) t
 bindDefaults st = st
  `binding` do
-   "if-bound" ## ifBound @Block
+   "if" ## ifBound @Block
    "switch" ## switchBound
    "bind" ## bind
    "bind-text" ## bindText stringify
  `binding` do
-   "if-bound" ## ifBound @Inline
+   "if" ## ifBound @Inline
    "switch" ## switchBound
    "bind" ## bind
    "bind-text" ## bindText stringify

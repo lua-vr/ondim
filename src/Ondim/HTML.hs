@@ -93,7 +93,7 @@ bindDefaults :: forall m t. Monad m =>
 bindDefaults st = st
  `binding` do
    "ignore" ## ignore @HtmlNode
-   "if-bound" ## ifBound
+   "if" ## ifBound
    "switch" ## switchBound
    "bind" ## bind
    "bind-text" ## bindText nodeText
