@@ -231,7 +231,7 @@ liftSub ::
   ) =>
   t -> Ondim tag t
 liftSub node =
-  let child = withOndimGS id $ liftNodes (getSubs @tag @t @s node)
+  let child = liftNodes (getSubs @tag @t @s node)
   in setSubs @tag node <$> child
 {-# INLINABLE liftSub #-}
 

@@ -128,8 +128,8 @@ bindText toTxt node = do
     putTextExp tag $ toTxt <$> node
   pure []
 
--- | This expansion does nothing, and simply return its children. This means that
---   its only purpose is to create a new scope for its children.
+-- | This expansion creates a new scope for the node's children, and returns
+-- them.
 --
 --   It can be used to call other expansions with "arguments":
 --
@@ -141,7 +141,7 @@ bindText toTxt node = do
 --   >   <animal-entry />
 --   > <scope/>
 scope :: forall t tag. HasAttrChild tag t => Expansion tag t
-scope = children
+scope = withOndimGS id . children
 
 -- | Substitution of !(name) in attribute text
 interpParser :: Parser Text
