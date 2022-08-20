@@ -60,6 +60,7 @@ import Data.HList.HList (HList (..))
 import Relude.Extra.Map (insert, lookup, delete, keys)
 import Data.Map.Syntax ((##), runMap, MapSyntax)
 import Ondim.HasSub
+import Data.Typeable (TypeRep, typeRep)
 
 class Monad (OndimMonad t) => OndimTag t where
   type OndimTypes t :: [Type]
@@ -78,6 +79,7 @@ class
   , LiftAllSub (ExpTypes t)
   , ContainsType t (OndimTypes tag)
   , OndimTag tag
+  , Typeable t
   ) => OndimNode tag t
   where
   type ExpTypes t :: [Type]
@@ -137,14 +139,14 @@ type MultiOndimS tag = MultiOndimS' tag (OndimTypes tag)
 
 data OndimException
   = MaxExpansionDepthExceeded [Text]
-  | ExpansionNotBound Text [Text]
+  | ExpansionNotBound Text TypeRep [Text]
   deriving (Show)
 
-throwNotBound :: forall tag b.
-  OndimTag tag =>
-  Text -> Ondim tag b
+throwNotBound :: forall t tag s.
+  (OndimTag tag, Typeable t) =>
+  Text -> Ondim tag s
 throwNotBound name =
-  throwError . ExpansionNotBound name
+  throwError . ExpansionNotBound name (typeRep (Proxy @t))
     =<< Ondim (mGets @(OndimGS tag) expansionTrace)
 
 newtype Ondim tag a = Ondim
@@ -292,7 +294,7 @@ liftNode node = do
                 liftedNode
         | Just valid <- validIdentifiers @tag @t,
           name `notElem` valid ->
-            throwNotBound name
+            throwNotBound @t name
       _ -> one <$> liftedNode
   where
     liftedNode = liftSubstructures node
@@ -382,16 +384,16 @@ fromTemplate tpl inner =
 
 {- | Either applies expansion 'name', or throws an error if it does not exist.
 -}
-callExpansion :: OndimNode tag t => Text -> Expansion tag t
+callExpansion :: forall t tag. OndimNode tag t => Text -> Expansion tag t
 callExpansion name arg =
   expCtx name $ do
     exps <- getExpansion name
-    maybe (throwNotBound name) ($ arg) exps
+    maybe (throwNotBound @t name) ($ arg) exps
 
 callText ::
   OndimTag tag =>
   Text -> Ondim tag Text
 callText k =
   expCtx k $
-    fromMaybe (throwNotBound k) =<<
+    fromMaybe (throwNotBound @Text k) =<<
       Ondim (mGets \s -> lookup k (textExpansions s))
