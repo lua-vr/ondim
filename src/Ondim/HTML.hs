@@ -96,6 +96,7 @@ bindDefaults st = st
    "if" ## ifBound
    "switch" ## switchBound
    "bind" ## bind
+   "scope" ## scope
    "bind-text" ## bindText nodeText
   `bindingFilters` do
     "attrSub" ## attrSub

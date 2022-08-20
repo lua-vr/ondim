@@ -113,6 +113,21 @@ bindText toTxt node = do
 
 -- Substitution of !(name) in attribute text
 
+-- | This expansion does nothing, and simply return its children. This means that
+--   its only purpose is to create a new scope for its children.
+--
+--   It can be used to call other expansions with "arguments":
+--
+--   > <bind animal-entry>There is a <animal /> with age <age /></bind>
+--   >
+--   > <scope>
+--   >   <bind animal>Lion</bind>
+--   >   <bind age>9 years</bind>
+--   >   <animal-entry />
+--   > <scope/>
+scope :: forall t tag. HasAttrChild tag t => Expansion tag t
+scope = children
+
 interpParser :: Parser Text
 interpParser = do
   _ <- string "!("

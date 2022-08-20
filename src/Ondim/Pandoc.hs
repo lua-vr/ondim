@@ -135,11 +135,13 @@ bindDefaults st = st
    "if" ## ifBound @Block
    "switch" ## switchBound
    "bind" ## bind
+   "scope" ## scope
    "bind-text" ## bindText stringify
  `binding` do
    "if" ## ifBound @Inline
    "switch" ## switchBound
    "bind" ## bind
+   "scope" ## scope
    "bind-text" ## bindText stringify
   `bindingFilters` do
     "attrSub" ## attrSub
