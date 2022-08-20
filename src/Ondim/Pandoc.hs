@@ -146,6 +146,18 @@ instance HasSub (PandocTag m) Attribute ExpansibleText where
   getSubs (_,t) = [t]
   setSubs (k,_) t = (k, mconcat t)
 
+cons :: forall m. Monad m => Expansion (PandocTag m) Block
+cons x = do
+  nodes <- children x
+  pure $
+    fromMaybe nodes do
+      (h0 :| nodes') <- nonEmpty nodes
+      (h1 :| nodes'') <- nonEmpty nodes'
+      let i :: [Inline] =
+            getSubs @(PandocTag m) h0 ++
+            getSubs @(PandocTag m) h1
+      pure $ setSubs @(PandocTag m) h1 i : nodes''
+
 bindDefaults :: forall m t. Monad m =>
   Ondim (PandocTag m) t -> Ondim (PandocTag m) t
 bindDefaults st = st
@@ -155,6 +167,7 @@ bindDefaults st = st
    "bind" ## bind
    "scope" ## scope
    "bind-text" ## bindText stringify
+   "cons" ## cons
  `binding` do
    "if" ## ifBound @Inline
    "switch" ## switchBound
