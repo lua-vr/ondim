@@ -17,7 +17,10 @@ class HasSub tag t s where
   default setSubs :: (Generic t, HasSub' [s] (Rep t), ContainsSome [s] (Rep t)) => t -> [s] -> t
   setSubs x = to . setSubs' (from x)
 
-instance HasSub tag [t] t
+-- I wonder why the generic instance for this is not working 🤔
+instance HasSub tag [t] t where
+  getSubs = id
+  setSubs _ = id
 
 newtype OneSub a = OneSub a
   deriving Generic
