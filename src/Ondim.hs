@@ -118,6 +118,12 @@ data OndimS tag t = OndimS
   -- purpose of the name is just to facilitate binding/unbinding).
   }
 
+instance Semigroup (OndimS tag t) where
+  OndimS x1 y1 <> OndimS x2 y2 = OndimS (x1 <> x2) (y1 <> y2)
+
+instance Monoid (OndimS tag t) where
+  mempty = OndimS mempty mempty
+
 {- | Initial state
 -}
 initialOS :: OndimS tag t
