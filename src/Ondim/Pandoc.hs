@@ -15,6 +15,8 @@ data PandocTag (m :: Type -> Type)
 getId :: [Text] -> Maybe Text
 getId = asum . map (T.stripPrefix "e:")
 
+newtype Target' = Target' (Text, Text)
+
 instance Monad m => OndimTag (PandocTag m) where
   type OndimTypes (PandocTag m) =
     '[ Pandoc
@@ -25,6 +27,7 @@ instance Monad m => OndimTag (PandocTag m) where
      , Block
      , [Block]
      , ([Inline], [[Block]])
+     , Target'
      , Attribute
      , ExpansibleText
      ]
@@ -87,7 +90,7 @@ deriving via (NestedSub Attr Attribute) instance HasSub (PandocTag m) Block Attr
 deriving via (OneSub ExpansibleText) instance HasSub (PandocTag m) Block ExpansibleText
 
 instance Monad m => OndimNode (PandocTag m) Inline where
-  type ExpTypes Inline = '[Inline, Block, Attribute, ExpansibleText]
+  type ExpTypes Inline = '[Inline, Block, Attribute, Target', ExpansibleText]
   identify (Span (_,n,_) _) = getId n
   identify _ = Nothing
   fromText = Just (toList . B.text)
@@ -97,6 +100,21 @@ instance HasSub (PandocTag m) Inline Inline
 instance HasSub (PandocTag m) Inline Block
 deriving via (NestedSub Attr Attribute) instance HasSub (PandocTag m) Inline Attribute
 deriving via (OneSub ExpansibleText) instance HasSub (PandocTag m) Inline ExpansibleText
+instance HasSub (PandocTag m) Inline Target' where
+  getSubs (Link _ _ t) = [Target' t]
+  getSubs (Image _ _ t) = [Target' t]
+  getSubs _ = []
+  setSubs (Link x y _) [z] = Link x y (coerce z)
+  setSubs (Image x y _) [z] = Image x y (coerce z)
+  setSubs x _ = x
+
+instance Monad m => OndimNode (PandocTag m) Target' where
+  type ExpTypes Target' = '[Text]
+
+instance HasSub (PandocTag m) Target' Text where
+  getSubs (Target' (s,t)) = [s,t]
+  setSubs _ [a,b] = Target' (a,b)
+  setSubs x _ = x
 
 instance Monad m => OndimNode (PandocTag m) ([Inline], [[Block]]) where
   type ExpTypes ([Inline], [[Block]]) = '[Inline, [Block]]
