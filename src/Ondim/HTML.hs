@@ -29,6 +29,8 @@ fromNodeList = foldr go [] . filter notEmpty
     notEmpty X.Comment {} = False
     notEmpty _ = True
 
+    go (X.TextNode t) []
+      | T.all isSpace t, T.any ('\n' ==) t = []
     go (X.TextNode t) (el@Element{} : xs)
       | T.all isSpace t, T.any ('\n' ==) t =
           el { preNewline = True } : xs
