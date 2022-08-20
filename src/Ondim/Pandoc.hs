@@ -13,7 +13,7 @@ import qualified Text.Pandoc.Builder as B
 data PandocTag (m :: Type -> Type)
 
 getId :: [Text] -> Maybe Text
-getId = find (T.isPrefixOf "e:")
+getId = asum . map (T.stripPrefix "e:")
 
 instance Monad m => OndimTag (PandocTag m) where
   type OndimTypes (PandocTag m) =
