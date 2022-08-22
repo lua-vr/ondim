@@ -39,10 +39,10 @@ you can now write in your HTML templates:
 
 The beauty of ondim (and one aspect that takes it further from Heist) is that the ~ifElse~ splice is polymorphic on the format type, so we are not restricted to HTML. In a Pandoc backend, the same template could be written as:
 #+begin_src markdown
-:::: {#if-cat}
+:::: e:if-cat
 I have a _beautiful_ cat!
 
-::: {#else}
+::: e:else
 :::
 I don't have a cat :sob:
 ::::
