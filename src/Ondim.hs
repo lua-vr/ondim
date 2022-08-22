@@ -2,6 +2,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Ondim
   ( OndimTag (..)
@@ -217,10 +219,19 @@ withOndimS :: forall t tag a. (OndimTag tag, ContainsOndimS tag t) =>
 withOndimS f = Ondim . withMultiStateT f . unOndimT
 
 getExpansion :: forall t tag.
-  (OndimTag tag, ContainsOndimS tag t) =>
-  Text -> Ondim tag (Maybe (Expansion tag t))
-getExpansion k = Ondim $
-  mGets (\s -> lookup k (expansions s))
+  OndimNode tag t => Text -> Ondim tag (Maybe (Expansion tag t))
+getExpansion name = do
+  gst <- Ondim $ mGet @(OndimGS tag)
+  st  <- Ondim $ mGet @(OndimS tag t)
+  if | Just fT <- fromText @tag,
+       Just text <- lookup name (textExpansions gst) ->
+         expCtx name $
+           pure $ Just (const $ fT <$> text)
+     | Just expansion <- lookup name (expansions st) ->
+         expCtx name $
+           pure $ Just expansion
+     | otherwise -> pure Nothing
+{-# INLINABLE getExpansion #-}
 
 liftSub ::
   forall tag t s.
@@ -275,36 +286,33 @@ liftNode ::
   t -> Ondim tag [t]
 liftNode node = do
   gst <- Ondim $ mGet @(OndimGS tag)
-  st  <- Ondim $ mGet @(OndimS tag t)
-  -- let filter' = foldr (.) id (filters st)
   if inhibitExpansion gst
     then pure (one node)
     else case identify @tag node of
-      Just name
-        | expansionDepth gst >= 200 ->
-            -- To avoid recursive expansions
-            throwError (MaxExpansionDepthExceeded $ expansionTrace gst)
-        | Just fT <- fromText @tag,
-          Just text <- lookup name (textExpansions gst) ->
-            expCtx name $
-              fT <$> text
-        | Just expansion <- lookup name (expansions st) ->
-            expansion $
-              expCtx name $
-                liftedNode
-        | Just valid <- validIdentifiers @tag @t,
-          name `notElem` valid ->
-            throwNotBound @t name
+      Just name ->
+        getExpansion name >>= \case
+          Just expansion -> expansion liftedNode
+          Nothing
+            | Just valid <- validIdentifiers @tag @t,
+              name `notElem` valid ->
+                throwNotBound @t name
+            | otherwise -> one <$> liftedNode
       _ -> one <$> liftedNode
   where
     liftedNode = liftSubstructures node
 {-# INLINABLE liftNode #-}
 
-expCtx :: OndimTag tag => Text -> Ondim tag a -> Ondim tag a
-expCtx name =
-  withOndimGS
-    (\s -> s { expansionDepth = expansionDepth s + 1
-             , expansionTrace = name : expansionTrace s })
+expCtx :: forall tag a. OndimTag tag => Text -> Ondim tag a -> Ondim tag a
+expCtx name ctx = do
+  gst <- Ondim $ mGet @(OndimGS tag)
+  if expansionDepth gst >= 200
+    then -- To avoid recursive expansions
+      throwError (MaxExpansionDepthExceeded $ expansionTrace gst)
+    else
+      withOndimGS
+        (\s -> s { expansionDepth = expansionDepth s + 1
+                 , expansionTrace = name : expansionTrace s })
+        ctx
 
 -- | Lift a list of nodes, applying filters.
 liftNodes ::
@@ -382,13 +390,11 @@ fromTemplate tpl inner =
   liftNodes tpl `binding` do
     "apply-content" ## const (children inner)
 
-{- | Either applies expansion 'name', or throws an error if it does not exist.
--}
+-- | Either applies expansion 'name', or throws an error if it does not exist.
 callExpansion :: forall t tag. OndimNode tag t => Text -> Expansion tag t
-callExpansion name arg =
-  expCtx name $ do
-    exps <- getExpansion name
-    maybe (throwNotBound @t name) ($ arg) exps
+callExpansion name arg = do
+  exps <- getExpansion name
+  maybe (throwNotBound @t name) ($ arg) exps
 
 callText ::
   OndimTag tag =>
