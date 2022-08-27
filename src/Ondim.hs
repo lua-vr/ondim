@@ -22,11 +22,16 @@ module Ondim
   , initialOGS
   , OndimS (..)
   , initialOS
+  , OndimMS
+  , ondimState
+  , ondimGState
+  , initialMS
   , OndimException (..)
   , throwNotBound
   , Ondim
   , ContainsOndimS
   , liftO
+  , runOndimTWith
   , runOndimT
   , withOndimGS
   , inhibitingExpansions
@@ -57,12 +62,13 @@ import Prelude hiding (All)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Trans.MultiState.Strict (runMultiStateTA, mGet, MultiStateT (..))
 import Ondim.MultiState (All, mGets, mModify, withMultiStateT)
-import Data.HList.ContainsType (ContainsType)
+import Data.HList.ContainsType (ContainsType, setHListElem, getHListElem)
 import Data.HList.HList (HList (..))
 import Relude.Extra.Map (insert, lookup, delete, keys)
 import Data.Map.Syntax ((##), runMap, MapSyntax)
 import Ondim.HasSub
 import Data.Typeable (TypeRep, typeRep)
+import Relude.Extra.Lens
 
 class Monad (OndimMonad t) => OndimTag t where
   type OndimTypes t :: [Type]
@@ -106,6 +112,7 @@ data OndimGS tag = OndimGS
  , inhibitExpansion :: Bool
  , textExpansions :: Map Text (Ondim tag Text)
  }
+ deriving (Generic)
 
 {- | Initial global state
 -}
@@ -121,6 +128,7 @@ data OndimS tag t = OndimS
   -- ^ Similar to expansions, but are always applied after the expansion (the
   -- purpose of the name is just to facilitate binding/unbinding).
   }
+  deriving (Generic)
 
 instance Semigroup (OndimS tag t) where
   OndimS x1 y1 <> OndimS x2 y2 = OndimS (x1 <> x2) (y1 <> y2)
@@ -138,6 +146,33 @@ type family MultiOndimS' tag (l :: [Type]) where
   MultiOndimS' tag (l : ls) = OndimS tag l : MultiOndimS' tag ls
 
 type MultiOndimS tag = MultiOndimS' tag (OndimTypes tag)
+
+newtype OndimMS tag = OndimMS (HList (OndimGS tag : MultiOndimS tag))
+ deriving (Generic)
+
+ondimState :: forall tag t. OndimNode tag t => Lens' (OndimMS tag) (OndimS tag t)
+ondimState = lens getMS setMS
+  where
+    setMS (OndimMS ms) s = OndimMS $ setHListElem s ms
+    getMS (OndimMS ms) = getHListElem ms
+
+ondimGState :: forall tag. Lens' (OndimMS tag) (OndimGS tag)
+ondimGState = lens getGS setGS
+  where
+    setGS (OndimMS ms) s = OndimMS $ setHListElem s ms
+    getGS (OndimMS ms) = getHListElem ms
+
+class ConcatHLists (ls :: [Type]) where
+  concatHLists :: HList ls -> HList ls -> HList ls
+
+instance ConcatHLists '[] where
+  concatHLists _ _ = HNil
+
+instance (ConcatHLists ls, Monoid l) => ConcatHLists (l : ls) where
+  concatHLists (a :+: as) (b :+: bs) = (a <> b) :+: concatHLists as bs
+
+instance ConcatHLists (MultiOndimS tag) => Semigroup (OndimMS tag) where
+  OndimMS (s :+: x) <> OndimMS (_ :+: y) = OndimMS (s :+: concatHLists x y)
 
 data OndimException
   = MaxExpansionDepthExceeded [Text]
@@ -174,8 +209,6 @@ instance Monad (OndimMonad tag) => MonadError OndimException (Ondim tag) where
           from = runMultiStateTRaw . unOndimT
 
 class HasInitialMultiState (ls :: [Type]) where
-  {- | Initial multi state
-  -}
   initialOMS :: HList (MultiOndimS' tag ls)
 
 instance HasInitialMultiState '[] where
@@ -185,7 +218,20 @@ instance HasInitialMultiState ls => HasInitialMultiState (l : ls) where
   initialOMS :: forall tag. HList (MultiOndimS' tag (l : ls))
   initialOMS = initialOS :+: initialOMS @ls @tag
 
-{- | Runs the Ondim action
+initialMS :: forall tag. HasInitialMultiState (OndimTypes tag) => OndimMS tag
+initialMS = OndimMS (initialOGS :+: initialOMS @(OndimTypes tag) @tag)
+
+{- | Runs the Ondim action with a given initial state.
+-}
+runOndimTWith ::
+  forall tag a.
+  ( OndimTag tag
+  ) =>
+  OndimMS tag -> Ondim tag a -> (OndimMonad tag) (Either OndimException a)
+runOndimTWith (OndimMS s) o = runExceptT $
+  runMultiStateTA s (unOndimT o)
+
+{- | Runs the Ondim action with empty initial state.
 -}
 runOndimT ::
   forall tag a.
@@ -193,8 +239,7 @@ runOndimT ::
   , HasInitialMultiState (OndimTypes tag)
   ) =>
   Ondim tag a -> (OndimMonad tag) (Either OndimException a)
-runOndimT o = runExceptT $
-  runMultiStateTA (initialOGS :+: initialOMS @(OndimTypes tag) @tag) (unOndimT o)
+runOndimT = runOndimTWith initialMS
 
 class ContainsType (OndimS tag t) (MultiOndimS tag) =>
   ContainsOndimS tag t
