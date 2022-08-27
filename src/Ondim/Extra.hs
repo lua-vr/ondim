@@ -99,7 +99,7 @@ ifBound node = do
 switchBound :: forall t tag. HasAttrChild tag t => Expansion tag t
 switchBound node = do
   tag <- getTag <$> attributes node
-  fromMaybe (children node) do
+  fromMaybe (pure []) do
     tagC <- callText @tag <$> tag
     pure $ (`switchWithDefault` node) =<< tagC
 
