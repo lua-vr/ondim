@@ -70,7 +70,11 @@ import Ondim.HasSub
 import Data.Typeable (TypeRep, typeRep)
 import Relude.Extra.Lens
 
-class Monad (OndimMonad t) => OndimTag t where
+class
+  ( Monad (OndimMonad t)
+  , HasInitialMultiState (OndimTypes t)
+  ) => OndimTag t
+  where
   type OndimTypes t :: [Type]
   type OndimMonad t :: Type -> Type
 
@@ -150,7 +154,7 @@ type MultiOndimS tag = MultiOndimS' tag (OndimTypes tag)
 newtype OndimMS tag = OndimMS (HList (OndimGS tag : MultiOndimS tag))
  deriving (Generic)
 
-ondimState :: forall tag t. OndimNode tag t => Lens' (OndimMS tag) (OndimS tag t)
+ondimState :: forall t tag. OndimNode tag t => Lens' (OndimMS tag) (OndimS tag t)
 ondimState = lens getMS setMS
   where
     setMS (OndimMS ms) s = OndimMS $ setHListElem s ms
