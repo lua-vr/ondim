@@ -21,6 +21,14 @@ maintainer:         lvr@s-viva.xyz
 -- category:
 extra-source-files: CHANGELOG.md
 
+flag with-pandoc
+  description: Include Pandoc definitions and dependencies.
+  default:     True
+
+flag with-html
+  description: Include HTML (xmlhtml) definitions and dependencies.
+  default:     True
+
 library
   -- Modules included in this executable, other than Main.
   -- other-modules:
@@ -28,23 +36,37 @@ library
   -- LANGUAGE extensions used by modules in this package.
   exposed-modules:  Ondim
                     Ondim.Extra
-                    Ondim.HTML
-                    Ondim.Pandoc
+                    Ondim.Extra.Expansions
+                    Ondim.Extra.Loading
   other-modules:    Ondim.MultiState
                     Ondim.HasSub
   build-depends:    base >= 4.14 && < 5
                   , attoparsec
                   , containers
-                  , HaTeX
+                  , filepath
+                  , filepattern
                   , map-syntax
                   , mtl
+                  , monad-logger
                   , multistate
-                  , xmlhtml
                   , relude
-                  , pandoc-types
                   , neat-interpolation
                   , replace-attoparsec
                   , text
+                  , unionmount
+                  , unliftio-core
+
+  if flag(with-pandoc)
+    exposed-modules: Ondim.Pandoc
+                     Ondim.Extra.Loading.Pandoc
+    build-depends:   pandoc-types
+                   , pandoc
+
+  if flag(with-html)
+    exposed-modules: Ondim.HTML
+                     Ondim.Extra.Loading.HTML
+    build-depends:   xmlhtml
+
   mixins:           base hiding (Prelude)
                   , relude (Relude as Prelude)
                   , relude
