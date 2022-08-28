@@ -274,11 +274,9 @@ getExpansion name = do
   st  <- Ondim $ mGet @(OndimS tag t)
   if | Just fT <- fromText @tag,
        Just text <- lookup name (textExpansions gst) ->
-         expCtx name $
-           pure $ Just (const $ fT <$> text)
+         pure $ Just (const $ expCtx name $ fT <$> text)
      | Just expansion <- lookup name (expansions st) ->
-         expCtx name $
-           pure $ Just expansion
+         pure $ Just (expansion . expCtx name)
      | otherwise -> pure Nothing
 {-# INLINABLE getExpansion #-}
 
@@ -449,6 +447,6 @@ callText ::
   OndimTag tag =>
   Text -> Ondim tag Text
 callText k =
-  expCtx k $
-    fromMaybe (throwNotBound @Text k) =<<
-      Ondim (mGets \s -> lookup k (textExpansions s))
+  fromMaybe (throwNotBound @Text k) =<<
+    expCtx k
+      (Ondim $ mGets \s -> lookup k (textExpansions s))
