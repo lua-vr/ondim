@@ -60,7 +60,7 @@ module Ondim
   where
 import Prelude hiding (All)
 import Control.Monad.Except (MonadError (..))
-import Control.Monad.Trans.MultiState.Strict (runMultiStateTA, mGet, MultiStateT (..))
+import Control.Monad.Trans.MultiState.Strict (runMultiStateTA, mGet, MultiStateT (..), runMultiStateT)
 import Ondim.MultiState (All, mGets, mModify, withMultiStateT)
 import Data.HList.ContainsType (ContainsType, setHListElem, getHListElem)
 import Data.HList.HList (HList (..))
@@ -276,7 +276,7 @@ getExpansion name = do
        Just text <- lookup name (textExpansions gst) ->
          pure $ Just (const $ expCtx name $ fT <$> text)
      | Just expansion <- lookup name (expansions st) ->
-         pure $ Just (expansion . expCtx name)
+         pure $ Just (expCtx name . expansion)
      | otherwise -> pure Nothing
 {-# INLINABLE getExpansion #-}
 
@@ -349,17 +349,32 @@ liftNode node = do
     liftedNode = liftSubstructures node
 {-# INLINABLE liftNode #-}
 
+withDebugCtx ::
+  forall tag a.
+  OndimTag tag =>
+  (Int -> Int) ->
+  ([Text] -> [Text]) ->
+  Ondim tag a -> Ondim tag a
+withDebugCtx f g (Ondim comp) =
+  Ondim $ MultiStateT $ StateT \s -> do
+    let gs :: OndimGS tag = getHListElem s
+        depth' = expansionDepth gs
+        trace' = expansionTrace gs
+        gs' = gs { expansionDepth = f depth', expansionTrace = g trace' }
+        s' = setHListElem gs' s
+    (out, s'') <- runMultiStateT s' comp
+    let gs'' :: OndimGS tag = getHListElem s''
+        gs''' = gs'' { expansionDepth = depth', expansionTrace = trace' }
+        s''' = setHListElem gs''' s''
+    pure (out, s''')
+
 expCtx :: forall tag a. OndimTag tag => Text -> Ondim tag a -> Ondim tag a
 expCtx name ctx = do
   gst <- Ondim $ mGet @(OndimGS tag)
   if expansionDepth gst >= 200
     then -- To avoid recursive expansions
       throwError (MaxExpansionDepthExceeded $ expansionTrace gst)
-    else
-      withOndimGS
-        (\s -> s { expansionDepth = expansionDepth s + 1
-                 , expansionTrace = name : expansionTrace s })
-        ctx
+    else withDebugCtx (+ 1) (name :) ctx
 
 -- | Lift a list of nodes, applying filters.
 liftNodes ::
