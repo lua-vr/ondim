@@ -2,7 +2,7 @@ module Ondim.Extra.Loading.Pandoc where
 
 import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger, runStdoutLoggingT)
+import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Ondim
 import Ondim.Extra.Loading
 import Ondim.Pandoc
@@ -48,4 +48,4 @@ loadTemplatesDynamic =
         )
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimMS (PandocTag n))
-loadTemplates dirs = fst <$> runStdoutLoggingT (loadTemplatesDynamic dirs)
+loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)

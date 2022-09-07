@@ -2,7 +2,7 @@ module Ondim.Extra.Loading.HTML where
 
 import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger, runStdoutLoggingT)
+import Control.Monad.Logger (MonadLogger, NoLoggingT (runNoLoggingT))
 import Ondim
 import Ondim.Extra.Loading
 import Ondim.HTML
@@ -31,4 +31,4 @@ loadTemplatesDynamic =
         %~ (\s -> s {expansions = delete name (expansions s)})
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimMS (HtmlTag n))
-loadTemplates dirs = fst <$> runStdoutLoggingT (loadTemplatesDynamic dirs)
+loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
