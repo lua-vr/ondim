@@ -37,6 +37,7 @@ module Ondim
   , inhibitingExpansions
   , withOndimS
   , getExpansion
+  , getTextExpansion
   , liftNode
   , liftNodes
   , liftSubstructures
@@ -280,6 +281,13 @@ getExpansion name = do
      | otherwise -> pure Nothing
 {-# INLINABLE getExpansion #-}
 
+getTextExpansion ::
+  OndimTag tag =>
+  Text -> Ondim tag (Maybe (Ondim tag Text))
+getTextExpansion k =
+  expCtx k
+    (Ondim $ mGets \s -> lookup k (textExpansions s))
+
 liftSub ::
   forall tag t s.
   ( HasSub tag t s
@@ -461,7 +469,4 @@ callExpansion name arg = do
 callText ::
   OndimTag tag =>
   Text -> Ondim tag Text
-callText k =
-  fromMaybe (throwNotBound @Text k) =<<
-    expCtx k
-      (Ondim $ mGets \s -> lookup k (textExpansions s))
+callText k = fromMaybe (throwNotBound @Text k) =<< getTextExpansion k
