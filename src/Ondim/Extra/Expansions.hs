@@ -30,6 +30,14 @@ type HasAttrChild tag t =
     HasSub tag t Attribute
   )
 
+-- Adding prefixes
+
+{- | Simple convenience function for prefixing expansion names, useful for
+   simulating namespaces.
+-}
+prefixed :: Text -> MapSyntax Text a -> MapSyntax Text a
+prefixed pfx = mapK (pfx <>)
+
 -- Expansions
 
 ignore :: forall t tag. OndimTag tag => Expansion tag t
