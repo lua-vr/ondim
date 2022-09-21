@@ -137,10 +137,10 @@ bindText toTxt node = do
     putTextExp tag $ toTxt <$> node
   pure []
 
--- | This expansion creates a new scope for the node's children, and returns
--- them.
+-- | This expansion creates a new scope for the its children, in the sense that
+-- the inner state does not leak outside.
 --
---   It can be used to call other expansions with "arguments":
+--  For this reason, it can be used to call other expansions with "arguments":
 --
 --   > <bind animal-entry>There is a <animal /> with age <age /></bind>
 --   >
