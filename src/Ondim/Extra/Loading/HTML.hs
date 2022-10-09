@@ -22,7 +22,7 @@ loadTemplatesDynamic =
       let template =
             either
               (throw . TemplateLoadingException)
-              fromDocument
+              (fromDocument name)
               (X.parseHTML (toString name) text)
        in ondimState
             %~ (\s -> s {expansions = insert name template (expansions s)})

@@ -25,10 +25,10 @@ loadTemplatesDynamic =
   loadTemplatesDynamic' patts ins del
   where
     patts = [(InlineTpl, "**/*.inl.md"), (BlockTpl, "**/*.blk.md")]
-    ins InlineTpl name (loadPandoc inlineFromDocument -> tpl) =
+    ins InlineTpl name (loadPandoc (inlineFromDocument name) -> tpl) =
       ondimState
         %~ (\s -> s {expansions = insert name tpl (expansions s)})
-    ins BlockTpl name (loadPandoc blockFromDocument -> tpl) =
+    ins BlockTpl name (loadPandoc (blockFromDocument name) -> tpl) =
       ondimState
         %~ (\s -> s {expansions = insert name tpl (expansions s)})
     del InlineTpl name =

@@ -454,10 +454,10 @@ bindingText o exps = withText (fromRight mempty (runMap exps)) o
 
 fromTemplate :: forall tag t.
   (OndimNode tag t, LiftAllSub (ExpTypes t), HasSub tag t t) =>
-  [t] -> Expansion tag t
-fromTemplate tpl inner =
+  Text -> [t] -> Expansion tag t
+fromTemplate name tpl inner =
   liftNodes tpl `binding` do
-    "apply-content" ## const (children inner)
+    name <> ":content" ## const (children inner)
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
 callExpansion :: forall t tag. OndimNode tag t => Text -> Expansion tag t

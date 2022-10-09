@@ -179,12 +179,12 @@ bindDefaults st = st
 
 -- Template loading helpers
 
-blockFromDocument :: Monad m => Pandoc -> Expansion (PandocTag m) Block
-blockFromDocument (Pandoc _ b) = fromTemplate b
+blockFromDocument :: Monad m => Text -> Pandoc -> Expansion (PandocTag m) Block
+blockFromDocument name (Pandoc _ b) = fromTemplate name b
 
-inlineFromDocument :: Monad m => Pandoc -> Expansion (PandocTag m) Inline
-inlineFromDocument (Pandoc _ (Para i : _)) = fromTemplate i
-inlineFromDocument _ = ignore
+inlineFromDocument :: Monad m => Text -> Pandoc -> Expansion (PandocTag m) Inline
+inlineFromDocument name (Pandoc _ (Para i : _)) = fromTemplate name i
+inlineFromDocument _ _ = ignore
 
 -- Miscellaneous (from Text.Pandoc.Shared)
 

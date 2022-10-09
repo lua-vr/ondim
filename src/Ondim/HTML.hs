@@ -105,8 +105,8 @@ bindDefaults st = st
 
 -- * Template loading helpers
 
-fromDocument :: Monad m => X.Document -> Expansion (HtmlTag m) HtmlNode
-fromDocument = fromTemplate . fromNodeList . X.docContent
+fromDocument :: Monad m => Text -> X.Document -> Expansion (HtmlTag m) HtmlNode
+fromDocument name = fromTemplate name . fromNodeList . X.docContent
 
 -- * Valid html tags
 
