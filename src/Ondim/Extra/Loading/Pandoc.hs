@@ -20,7 +20,7 @@ loadTemplatesDynamic ::
   forall m n.
   (Monad n, MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   [FilePath] ->
-  m (OndimMS (PandocTag n), (OndimMS (PandocTag n) -> m ()) -> m ())
+  m (OndimMS PandocTag n, (OndimMS PandocTag n -> m ()) -> m ())
 loadTemplatesDynamic =
   loadTemplatesDynamic' patts ins del
   where
@@ -32,10 +32,10 @@ loadTemplatesDynamic =
       ondimState
         %~ (\s -> s {expansions = insert name tpl (expansions s)})
     del InlineTpl name =
-      ondimState @Inline @(PandocTag n)
+      ondimState @PandocTag @n @Inline
         %~ (\s -> s {expansions = delete name (expansions s)})
     del BlockTpl name =
-      ondimState @Block @(PandocTag n)
+      ondimState @PandocTag @n @Block
         %~ (\s -> s {expansions = delete name (expansions s)})
     loadPandoc f txt =
       either
@@ -47,5 +47,5 @@ loadTemplatesDynamic =
               (decodeUtf8 txt :: Text)
         )
 
-loadTemplates :: Monad n => [FilePath] -> IO (OndimMS (PandocTag n))
+loadTemplates :: Monad n => [FilePath] -> IO (OndimMS PandocTag n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)

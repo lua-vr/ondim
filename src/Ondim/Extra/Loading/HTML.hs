@@ -13,7 +13,7 @@ loadTemplatesDynamic ::
   forall m n.
   (Monad n, MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   [FilePath] ->
-  m (OndimMS (HtmlTag n), (OndimMS (HtmlTag n) -> m ()) -> m ())
+  m (OndimMS HtmlTag n, (OndimMS HtmlTag n -> m ()) -> m ())
 loadTemplatesDynamic =
   loadTemplatesDynamic' patts ins del
   where
@@ -27,8 +27,8 @@ loadTemplatesDynamic =
        in ondimState
             %~ (\s -> s {expansions = insert name template (expansions s)})
     del () name =
-      ondimState @HtmlNode @(HtmlTag n)
+      ondimState @HtmlTag @n @HtmlNode
         %~ (\s -> s {expansions = delete name (expansions s)})
 
-loadTemplates :: Monad n => [FilePath] -> IO (OndimMS (HtmlTag n))
+loadTemplates :: Monad n => [FilePath] -> IO (OndimMS HtmlTag n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)

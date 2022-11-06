@@ -13,31 +13,31 @@ newtype TemplateLoadingError = TemplateLoadingException String
   deriving anyclass (Exception)
 
 loadTemplatesDynamic' ::
-  forall m tplTypes tag.
-  (OndimTag tag, Ord tplTypes) =>
+  forall m n tplTypes tag.
+  (OndimTag tag, Ord tplTypes, HasInitialMultiState (OndimTypes tag)) =>
   (MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   -- | Patterns to look for.
   [(tplTypes, FilePattern)] ->
   -- | Insertion
-  (tplTypes -> Text -> ByteString -> OndimMS tag -> OndimMS tag) ->
+  (tplTypes -> Text -> ByteString -> OndimMS tag n -> OndimMS tag n) ->
   -- | Deletion
-  (tplTypes -> Text -> OndimMS tag -> OndimMS tag) ->
+  (tplTypes -> Text -> OndimMS tag n -> OndimMS tag n) ->
   -- | Places to look for templates, in descending order of priority.
   [FilePath] ->
-  m (OndimMS tag, (OndimMS tag -> m ()) -> m ())
+  m (OndimMS tag n, (OndimMS tag n -> m ()) -> m ())
 loadTemplatesDynamic' patts ins del places =
   let sources = fromList (zip (zip [1 ..] places) places)
       patterns = patts
       exclude = []
       initial = initialMS
-      handler :: Change (Int, FilePath) tplTypes -> m (OndimMS tag -> OndimMS tag)
+      handler :: Change (Int, FilePath) tplTypes -> m (OndimMS tag n -> OndimMS tag n)
       handler chg =
         appEndo . mconcat . coerce . join
           <$> forM (toPairs chg) \(tplType, chg') ->
             forM (toPairs chg') \(file, fa) ->
               let name =
                     fromString $
-                      intercalate ":" $ splitDirectories $ dropExtensions $ file
+                      intercalate ":" $ splitDirectories $ dropExtensions file
                in case fa of
                     Refresh _ ls ->
                       let dir = snd $ minimumOn1 fst (fst <$> ls)

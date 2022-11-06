@@ -1,188 +1,137 @@
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-orphans #-} -- Just because Pandoc.Meta has no IsList instance.
-module Ondim.Pandoc where
-import Ondim
-import Ondim.Extra
-import Text.Pandoc.Definition
-import qualified Data.Text as T
-import Data.HList.ContainsType
-import Data.Map.Syntax ((##))
-import Text.Pandoc.Walk
-import qualified Text.Pandoc.Builder as B
 
-data PandocTag (m :: Type -> Type)
+module Ondim.Pandoc where
+
+import Data.Text qualified as T
+import Ondim
+import Ondim.Extra.Expansions
+  ( Attribute,
+    ExpansibleText,
+    ignore, switchBound, ifBound, bind, scope, bindText, attrSub, HasAttrs,
+  )
+import Ondim.MultiWalk.Combinators
+import Text.Pandoc.Builder qualified as B
+import Text.Pandoc.Definition
+import Text.Pandoc.Walk
+import Data.Map.Syntax ((##))
+
+data PandocTag
 
 getId :: [Text] -> Maybe Text
 getId = asum . map (T.stripPrefix "e:")
 
-newtype Target' = Target' (Text, Text)
+instance OndimTag PandocTag where
+  type
+    OndimTypes PandocTag =
+      '[ Pandoc,
+         Inline,
+         Block,
+         Attribute,
+         ExpansibleText
+       ]
 
-instance Monad m => OndimTag (PandocTag m) where
-  type OndimTypes (PandocTag m) =
-    '[ Pandoc
-     , MetaValue
-     , (Text, MetaValue)
-     , Inline
-     , [Inline]
-     , Block
-     , [Block]
-     , ([Inline], [[Block]])
-     , Target'
-     , Attribute
-     , ExpansibleText
-     ]
-  type OndimMonad (PandocTag m) = m
+instance OndimNode PandocTag Pandoc where
+  type
+    ExpTypes Pandoc =
+      ToSpecList
+        '[ Block
+         ]
 
-instance
-  ( ContainsOndimS (PandocTag m) [t]
-  , ContainsType [t] (OndimTypes (PandocTag m))
-  , OndimNode (PandocTag m) t
-  ) => OndimNode (PandocTag m) [t] where
-  type ExpTypes [t] = '[t]
-
-instance Monad m => OndimNode (PandocTag m) Pandoc where
-  type ExpTypes Pandoc ='[(Text, MetaValue), Block]
-
-instance HasSub (PandocTag m) Pandoc Block
-deriving via (Map Text MetaValue) instance IsList Meta
-deriving via (PairSub Meta Text MetaValue) instance HasSub (PandocTag m) Pandoc (Text, MetaValue)
-
-instance Monad m => OndimNode (PandocTag m) (Text, MetaValue) where
-  type ExpTypes (Text, MetaValue) ='[ExpansibleText, MetaValue]
-  identify = Just . fst
-
-deriving via (OneSub Text) instance HasSub (PandocTag m) (Text, MetaValue) ExpansibleText
-instance HasSub (PandocTag m) (Text, MetaValue) MetaValue where
-  getSubs = one . snd
-  setSubs x y = second (\z -> fromMaybe z (viaNonEmpty head y)) x -- ugh :c
-
-instance Monad m => OndimNode (PandocTag m) MetaValue where
-  type ExpTypes MetaValue ='[(Text, MetaValue), MetaValue, ExpansibleText, Inline, Block]
-  fromText = Just (one . MetaString)
-
-instance HasSub (PandocTag m) MetaValue MetaValue
-instance HasSub (PandocTag m) MetaValue Inline
-instance HasSub (PandocTag m) MetaValue Block
-deriving via (MapSub Text MetaValue) instance HasSub (PandocTag m) MetaValue (Text, MetaValue)
-deriving via (OneSub Text) instance HasSub (PandocTag m) MetaValue ExpansibleText
-
-instance Monad m => OndimNode (PandocTag m) Block where
-  type ExpTypes Block =
-    '[ Inline
-     , [Inline]
-     , Block
-     , [Block]
-     , ([Inline], [[Block]])
-     , Attribute
-     , ExpansibleText
-     ]
-  identify (Div (_,n,_) _) = getId n
-  identify (Header _ (_,n,_) _) = getId n
+instance OndimNode PandocTag Block where
+  type
+    ExpTypes Block =
+      ToSpecList
+        '[ Inline,
+           Under [Inline] Inline,
+           Block,
+           Under [Block] Block,
+           Under ([Inline], [[Block]]) (Under [Inline] Inline),
+           Under ([Inline], [[Block]]) (Under [[Block]] (Under [Block] Block)),
+           Under Attr Attribute,
+           OneSub ExpansibleText
+         ]
+  identify (Div (_, n, _) _) = getId n
+  identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
   validIdentifiers = Just []
 
-instance HasSub (PandocTag m) Block Inline
-instance HasSub (PandocTag m) Block [Inline]
-instance HasSub (PandocTag m) Block Block
-instance HasSub (PandocTag m) Block ([Inline], [[Block]])
-instance HasSub (PandocTag m) Block [Block]
-deriving via (NestedSub Attr Attribute) instance HasSub (PandocTag m) Block Attribute
-deriving via (OneSub ExpansibleText) instance HasSub (PandocTag m) Block ExpansibleText
+instance HasAttrs PandocTag Block
 
-instance Monad m => OndimNode (PandocTag m) Inline where
-  type ExpTypes Inline = '[Inline, Block, Attribute, Target', ExpansibleText]
-  identify (Span (_,n,_) _) = getId n
+instance OndimNode PandocTag Inline where
+  type
+    ExpTypes Inline =
+      ToSpecList
+        '[ Inline,
+           Block,
+           Converting Attr Attribute,
+           OneSub ExpansibleText,
+           Attribute
+         ]
+  identify (Span (_, n, _) _) = getId n
   identify _ = Nothing
   fromText = Just (toList . B.text)
   validIdentifiers = Just []
 
-instance HasSub (PandocTag m) Inline Inline
-instance HasSub (PandocTag m) Inline Block
-deriving via (NestedSub Attr Attribute) instance HasSub (PandocTag m) Inline Attribute
-deriving via (OneSub ExpansibleText) instance HasSub (PandocTag m) Inline ExpansibleText
-instance HasSub (PandocTag m) Inline Target' where
-  getSubs (Link _ _ t) = [Target' t]
-  getSubs (Image _ _ t) = [Target' t]
-  getSubs _ = []
-  setSubs (Link x y _) [z] = Link x y (coerce z)
-  setSubs (Image x y _) [z] = Image x y (coerce z)
-  setSubs x _ = x
+instance HasAttrs PandocTag Inline
 
-instance Monad m => OndimNode (PandocTag m) Target' where
-  type ExpTypes Target' = '[Text]
+instance Conversible PandocTag Attr [Attribute] where
+  convertTo (x, y, z) =
+    ("id", x)
+      : ("class", T.intercalate " " (filter (not . T.isPrefixOf "e:") y))
+      : z
+  convertFrom = foldMap go
+    where
+      go ("id", a) = (a, [], [])
+      go ("class", a) = ("", T.split (' ' ==) a, [])
+      go x = ("", [], [x])
 
-instance HasSub (PandocTag m) Target' Text where
-  getSubs (Target' (s,t)) = [s,t]
-  setSubs _ [a,b] = Target' (a,b)
-  setSubs x _ = x
-
-instance Monad m => OndimNode (PandocTag m) ([Inline], [[Block]]) where
-  type ExpTypes ([Inline], [[Block]]) = '[Inline, [Block]]
-  identify (_, (x : _)) = identify @(PandocTag m) x
-  identify _ = Nothing
-
-instance HasSub (PandocTag m) ([Inline], [[Block]]) Inline
-instance HasSub (PandocTag m) ([Inline], [[Block]]) [Block]
-
-instance HasSub (PandocTag m) Attr Attribute where
-  getSubs (x,y,z) =
-    ("id", x) :
-    ("class", T.intercalate " " (filter (not . T.isPrefixOf "e:") y)) :
-    z
-  setSubs _ = foldMap go
-    where go ("id", a) = (a, [], [])
-          go ("class", a) = ("", T.split (' ' ==) a, [])
-          go x = ("", [], [x])
-
--- TODO: can these instances be derived via automatically?
-instance Monad m => OndimNode (PandocTag m) ExpansibleText where
+instance OndimNode PandocTag ExpansibleText where
   type ExpTypes ExpansibleText = '[]
 
-instance Monad m => OndimNode (PandocTag m) Attribute where
-  type ExpTypes Attribute = '[ExpansibleText]
+instance OndimNode PandocTag Attribute where
+  type ExpTypes Attribute = ToSpecList '[OneSub ExpansibleText]
   identify = Just . fst
 
-instance HasSub (PandocTag m) Attribute ExpansibleText where
-  getSubs (_,t) = [t]
-  setSubs (k,_) t = (k, mconcat t)
-
-cons :: forall m. Monad m => Expansion (PandocTag m) Block
+cons :: forall m. Monad m => Expansion PandocTag m Block
 cons x = do
   nodes <- children x
   pure $
     fromMaybe nodes do
       (h0 :| nodes') <- nonEmpty nodes
       (h1 :| nodes'') <- nonEmpty nodes'
-      let i :: [Inline] =
-            getSubs @(PandocTag m) h0 ++
-            getSubs @(PandocTag m) h1
-      pure $ setSubs @(PandocTag m) h1 i : nodes''
+      let f :: [Inline] -> [Inline]
+          f y = getSubstructure @Inline h0 ++ y
+      pure $ modSubstructure @Inline f h1 : nodes''
 
-bindDefaults :: forall m t. Monad m =>
-  Ondim (PandocTag m) t -> Ondim (PandocTag m) t
-bindDefaults st = st
- `binding` do
-   "if" ## ifBound @Block
-   "switch" ## switchBound
-   "bind" ## bind
-   "scope" ## scope
-   "bind-text" ## bindText stringify
-   "cons" ## cons
- `binding` do
-   "if" ## ifBound @Inline
-   "switch" ## switchBound
-   "bind" ## bind
-   "scope" ## scope
-   "bind-text" ## bindText stringify
-  `bindingFilters` do
-    "attrSub" ## attrSub
+bindDefaults ::
+  forall m t.
+  Monad m =>
+  Ondim PandocTag m t ->
+  Ondim PandocTag m t
+bindDefaults st =
+  st
+    `binding` do
+      "if" ## ifBound @Block
+      "switch" ## switchBound
+      "bind" ## bind
+      "scope" ## scope
+      "bind-text" ## bindText stringify
+      "cons" ## cons
+    `binding` do
+      "if" ## ifBound @Inline
+      "switch" ## switchBound
+      "bind" ## bind
+      "scope" ## scope
+      "bind-text" ## bindText stringify
+    `bindingFilters` do
+      "attrSub" ## attrSub
 
 -- Template loading helpers
 
-blockFromDocument :: Monad m => Text -> Pandoc -> Expansion (PandocTag m) Block
+blockFromDocument :: Monad m => Text -> Pandoc -> Expansion PandocTag m Block
 blockFromDocument name (Pandoc _ b) = fromTemplate name b
 
-inlineFromDocument :: Monad m => Text -> Pandoc -> Expansion (PandocTag m) Inline
+inlineFromDocument :: Monad m => Text -> Pandoc -> Expansion PandocTag m Inline
 inlineFromDocument name (Pandoc _ (Para i : _)) = fromTemplate name i
 inlineFromDocument _ _ = ignore
 
@@ -190,11 +139,12 @@ inlineFromDocument _ _ = ignore
 
 stringify :: Walkable Inline a => a -> T.Text
 stringify = query go
-  where go :: Inline -> T.Text
-        go Space      = " "
-        go SoftBreak  = " "
-        go (Str x)    = x
-        go (Code _ x) = x
-        go (Math _ x) = x
-        go LineBreak  = " "
-        go _          = ""
+  where
+    go :: Inline -> T.Text
+    go Space = " "
+    go SoftBreak = " "
+    go (Str x) = x
+    go (Code _ x) = x
+    go (Math _ x) = x
+    go LineBreak = " "
+    go _ = ""
