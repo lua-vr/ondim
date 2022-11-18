@@ -39,7 +39,8 @@ module Ondim
     -- * Monad
     Ondim,
     runOndimTWith,
-    runOndimT,
+    evalOndimTWith,
+    evalOndimT,
 
     -- * Exceptions
     OndimException (..),
@@ -67,7 +68,9 @@ module Ondim
     putTextExpansion,
     getTextExpansion,
     callText,
-    -- Global state
+    -- State manipulation
+    getOndimMS,
+    putOndimMS,
     withOndimGS,
     withOndimS,
     inhibitingExpansions,
@@ -93,7 +96,7 @@ module Ondim
   )
 where
 
-import Control.Monad.Trans.MultiState.Strict (MultiStateT (..), runMultiStateTA)
+import Control.Monad.Trans.MultiState.Strict (MultiStateT (..), runMultiStateTA, runMultiStateTAS)
 import Control.MultiWalk.HasSub (All, GSubTag, HasSub (..), SubSpec (..))
 import Data.HList.ContainsType (getHListElem, setHListElem)
 import Data.HList.HList (HList (..))
@@ -157,25 +160,44 @@ initialMS :: forall tag m. HasInitialMultiState (OndimTypes tag) => OndimMS tag 
 initialMS = OndimMS (initialOGS :+: initialOMS @(OndimTypes tag) @tag @m)
 
 -- | Runs the Ondim action with a given initial state.
-runOndimTWith ::
+evalOndimTWith ::
   forall tag m a.
   Monad m =>
   OndimMS tag m ->
   Ondim tag m a ->
   m (Either OndimException a)
-runOndimTWith (OndimMS s) o =
+evalOndimTWith (OndimMS s) o =
   runExceptT $
     runMultiStateTA s (unOndimT o)
 
+runOndimTWith ::
+  forall tag m a.
+  Monad m =>
+  OndimMS tag m ->
+  Ondim tag m a ->
+  m (Either OndimException (a, OndimMS tag m))
+runOndimTWith (OndimMS s) o =
+  runExceptT $
+    second OndimMS
+      <$> runMultiStateTAS s (unOndimT o)
+
 -- | Runs the Ondim action with empty initial state.
-runOndimT ::
+evalOndimT ::
   forall tag m a.
   ( HasInitialMultiState (OndimTypes tag),
     Monad m
   ) =>
   Ondim tag m a ->
   m (Either OndimException a)
-runOndimT = runOndimTWith initialMS
+evalOndimT = evalOndimTWith initialMS
+
+-- State manipulation
+
+getOndimMS :: Monad m => Ondim tag m (OndimMS tag m)
+getOndimMS = OndimMS <$> Ondim (MultiStateT get)
+
+putOndimMS :: Monad m => OndimMS tag m -> Ondim tag m ()
+putOndimMS (OndimMS s) = Ondim (MultiStateT (put s))
 
 withOndimGS ::
   Monad m =>
