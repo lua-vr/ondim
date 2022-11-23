@@ -94,7 +94,7 @@ instance OndimNode PandocTag Attribute where
 
 cons :: forall m. Monad m => Expansion PandocTag m Block
 cons x = do
-  nodes <- children x
+  nodes <- liftChildren x
   pure $
     fromMaybe nodes do
       (h0 :| nodes') <- nonEmpty nodes

@@ -89,7 +89,6 @@ library
     DerivingStrategies
     DeriveAnyClass
     DeriveGeneric
-    DerivingVia
     LambdaCase
     StandaloneDeriving
     KindSignatures

@@ -73,7 +73,6 @@ module Ondim
     putOndimMS,
     withOndimGS,
     withOndimS,
-    inhibitingExpansions,
 
     -- * Node lifting
     liftNode,
@@ -86,8 +85,8 @@ module Ondim
     getSubstructure,
     modSubstructure,
     modSubstructureM,
-    children',
     children,
+    liftChildren,
 
     -- * Auxiliary
     All,
@@ -110,7 +109,7 @@ import Prelude hiding (All)
 
 -- | Initial global state
 initialOGS :: OndimGS tag m
-initialOGS = OndimGS 0 [] False mempty
+initialOGS = OndimGS 0 [] mempty
 
 -- | Initial state
 initialOS :: OndimS tag m t
@@ -209,9 +208,6 @@ withOndimGS f st =
     (,s) <$> runMultiStateTA (f os :+: ms) (unOndimT st)
 {-# INLINEABLE withOndimGS #-}
 
-inhibitingExpansions :: Monad m => Ondim tag m a -> Ondim tag m a
-inhibitingExpansions = withOndimGS (\s -> s {inhibitExpansion = True})
-
 -- | This function works like @withReaderT@, in the sense that it creates a new
 --   scope for the state in which state changes do not leak outside.
 withOndimS ::
@@ -300,22 +296,22 @@ bindingText ::
   Ondim tag m a
 bindingText o exps = withText (fromRight mempty (runMap exps)) o
 
-children' ::
+children ::
   forall tag t.
   ( OndimNode tag t
   ) =>
   t ->
   [t]
-children' = getSubstructure @t
+children = getSubstructure @t
 
-children ::
+liftChildren ::
   forall t tag m.
   ( OndimNode tag t,
-    Functor m
+    OndimTag tag,
+    Monad m
   ) =>
-  Ondim tag m t ->
-  Ondim tag m [t]
-children = fmap (children' @tag)
+  Expansion tag m t
+liftChildren = liftNodes . children @tag
 
 fromTemplate ::
   forall tag m t.
@@ -328,7 +324,7 @@ fromTemplate ::
   Expansion tag m t
 fromTemplate name tpl inner =
   liftNodes tpl `binding` do
-    name <> ":content" ## const (children inner)
+    name <> ":content" ## const (liftChildren inner)
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
 callExpansion :: forall t tag m. (OndimNode tag t, Monad m) => Text -> Expansion tag m t

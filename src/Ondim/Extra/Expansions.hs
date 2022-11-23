@@ -30,9 +30,8 @@ class HasAttrs tag t where
 attributes ::
   forall t tag m.
   (HasAttrs tag t, OndimNode tag Attribute, Monad m, OndimTag tag) =>
-  Ondim tag m t ->
-  Ondim tag m [Attribute]
-attributes = liftNodes <=< inhibitingExpansions . (getAttrs @tag <$>)
+  t -> Ondim tag m [Attribute]
+attributes = liftNodes . getAttrs @tag
 
 type HasAttrChild tag t =
   ( OndimNode tag t,
@@ -62,7 +61,7 @@ ifElse ::
   Bool ->
   Expansion tag m t
 ifElse cond node = do
-  els <- inhibitingExpansions $ children node
+  els <- liftChildren node
   let (yes, drop 1 -> no) =
         break ((Just "else" ==) . identify @tag) els
   if cond
@@ -79,7 +78,7 @@ switchCases tag =
     attrs <- attributes caseNode
     withoutExpansion @t "case" $
       if Just tag == getTag attrs
-        then children caseNode
+        then liftChildren caseNode
         else pure []
 {-# INLINEABLE switchCases #-}
 
@@ -89,7 +88,7 @@ switch ::
   Text ->
   Expansion tag m t
 switch tag node =
-  children node
+  liftChildren node
     `binding` switchCases @t tag
 
 switchWithDefault ::
@@ -98,12 +97,12 @@ switchWithDefault ::
   Text ->
   Expansion tag m t
 switchWithDefault tag node = do
-  els <- inhibitingExpansions $ children node
+  let els = children @tag node
   fromMaybe (pure []) do
     child <-
       find (\x -> nameIs "case" x && hasTag x) els
         <|> find (nameIs "default") els
-    pure $ liftNodes (children' @tag child)
+    pure $ liftChildren child
   where
     nameIs n x = identify @tag x == Just n
     hasTag (getAttrs @tag -> attrs) =
@@ -131,11 +130,14 @@ switchBound node = do
 bind :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
 bind node = do
   attrs <- attributes node
-  whenJust (getTag attrs) $ \tag -> do
-    putExpansion tag $ \inner ->
-      children node
+  whenJust (getTag attrs) $ \name -> do
+    putExpansion name $ \inner ->
+      liftChildren node
         `binding` do
-          "apply-content" ## const (children inner)
+          name <> ":content" ## const (liftChildren inner)
+        `bindingText`
+          forM_ (getAttrs @tag inner) \attr -> do
+            name <> ":" <> fst attr ## pure (snd attr)
   pure []
 
 -- | This expansion works like Heist's `bind` splice, but binds what's inside as
@@ -144,10 +146,10 @@ bindText ::
   (HasAttrChild tag t, Monad m) =>
   (t -> Text) ->
   Expansion tag m t
-bindText toTxt node = do
-  attrs <- attributes node
+bindText toTxt self = do
+  attrs <- attributes self
   whenJust (getTag attrs) $ \tag -> do
-    putTextExpansion tag $ toTxt <$> node
+    putTextExpansion tag $ foldMap toTxt <$> liftChildren self
   pure []
 
 -- | This expansion creates a new scope for the its children, in the sense that
@@ -163,7 +165,7 @@ bindText toTxt node = do
 --   >   <animal-entry />
 --   > <scope/>
 scope :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
-scope = withOndimGS id . children
+scope = withOndimGS id . liftChildren
 
 -- | Substitution of !(name) in attribute text
 interpParser :: Parser Text

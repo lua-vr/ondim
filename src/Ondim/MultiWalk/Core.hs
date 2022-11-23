@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 
 module Ondim.MultiWalk.Core where
@@ -57,7 +56,7 @@ type Filter tag m t = Ondim tag m [t] -> Ondim tag m [t]
 
 type Filters tag m t = Map Text (Filter tag m t)
 
-type Expansion tag (m :: Type -> Type) (t :: Type) = Ondim tag m t -> Ondim tag m [t]
+type Expansion tag (m :: Type -> Type) (t :: Type) = t -> Ondim tag m [t]
 
 type Expansions tag (m :: Type -> Type) (t :: Type) = Map Text (Expansion tag m t)
 
@@ -81,7 +80,6 @@ instance Monoid (OndimS tag m t) where
 data OndimGS tag (m :: Type -> Type) = OndimGS
   { expansionDepth :: Int,
     expansionTrace :: [Text],
-    inhibitExpansion :: Bool,
     textExpansions :: Map Text (Ondim tag m Text)
   }
   deriving (Generic)
@@ -143,19 +141,16 @@ liftNode ::
   t ->
   Ondim tag m [t]
 liftNode node = do
-  gst <- Ondim $ mGet @(OndimGS tag m)
-  if inhibitExpansion gst
-    then pure (pure node)
-    else case identify @tag node of
-      Just name ->
-        getExpansion name >>= \case
-          Just expansion -> expansion liftedNode
-          Nothing
-            | Just valid <- validIdentifiers @tag @t,
-              name `notElem` valid ->
-                throwNotBound @t name
-            | otherwise -> pure <$> liftedNode
-      _ -> pure <$> liftedNode
+  case identify @tag node of
+    Just name ->
+      getExpansion name >>= \case
+        Just expansion -> expansion node
+        Nothing
+          | Just valid <- validIdentifiers @tag @t,
+            name `notElem` valid ->
+              throwNotBound @t name
+          | otherwise -> pure <$> liftedNode
+    _ -> pure <$> liftedNode
   where
     liftedNode = liftSubstructures node
 {-# INLINEABLE liftNode #-}
@@ -268,7 +263,7 @@ withDebugCtx ::
   Ondim tag m a ->
   Ondim tag m a
 withDebugCtx f g (Ondim comp) =
-  Ondim $ MultiStateT $ StateT \s -> do
+  Ondim $ MultiStateT $ StateT $ \s -> do
     let gs :: OndimGS tag m = getHListElem s
         depth' = expansionDepth gs
         trace' = expansionTrace gs
