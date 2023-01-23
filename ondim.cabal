@@ -59,14 +59,18 @@ library
                   , unliftio-core
 
   if flag(with-pandoc)
-    exposed-modules: Ondim.Pandoc
-                     Ondim.Extra.Loading.Pandoc
+    exposed-modules: Ondim.Targets.Pandoc
+                     Ondim.Targets.Pandoc.Instances
+                     Ondim.Targets.Pandoc.Expansions
+                     Ondim.Targets.Pandoc.Load
     build-depends:   pandoc-types
                    , pandoc
 
   if flag(with-html)
-    exposed-modules: Ondim.HTML
-                     Ondim.Extra.Loading.HTML
+    exposed-modules: Ondim.Targets.HTML
+                     Ondim.Targets.HTML.Instances
+                     Ondim.Targets.HTML.Expansions
+                     Ondim.Targets.HTML.Load
     build-depends:   xmlhtml
 
   mixins:           base hiding (Prelude)

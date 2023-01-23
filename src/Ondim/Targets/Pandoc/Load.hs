@@ -1,11 +1,12 @@
-module Ondim.Extra.Loading.Pandoc where
+module Ondim.Targets.Pandoc.Load where
 
 import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Ondim
+import Ondim.Extra.Expansions (ignore)
 import Ondim.Extra.Loading
-import Ondim.Pandoc
+import Ondim.Targets.Pandoc.Instances
 import Relude.Extra (delete, insert, (%~))
 import Text.Pandoc (def, pandocExtensions, readMarkdown, readerExtensions, renderError, runPure)
 import Text.Pandoc.Definition
@@ -49,3 +50,12 @@ loadTemplatesDynamic =
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimMS PandocTag n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
+
+-- Template loading helpers
+
+blockFromDocument :: Monad m => Text -> Pandoc -> Expansion PandocTag m Block
+blockFromDocument name (Pandoc _ b) = fromTemplate name b
+
+inlineFromDocument :: Monad m => Text -> Pandoc -> Expansion PandocTag m Inline
+inlineFromDocument name (Pandoc _ (Para i : _)) = fromTemplate name i
+inlineFromDocument _ _ = ignore

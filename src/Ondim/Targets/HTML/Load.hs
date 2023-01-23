@@ -1,11 +1,11 @@
-module Ondim.Extra.Loading.HTML where
+module Ondim.Targets.HTML.Load where
 
 import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, NoLoggingT (runNoLoggingT))
 import Ondim
 import Ondim.Extra.Loading
-import Ondim.HTML
+import Ondim.Targets.HTML.Instances
 import Relude.Extra (delete, insert, (%~))
 import Text.XmlHtml qualified as X
 
@@ -32,3 +32,8 @@ loadTemplatesDynamic =
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimMS HtmlTag n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
+
+-- * Template loading helpers
+
+fromDocument :: Monad m => Text -> X.Document -> Expansion HtmlTag m HtmlNode
+fromDocument name = fromTemplate name . fromNodeList . X.docContent

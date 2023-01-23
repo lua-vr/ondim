@@ -1,16 +1,19 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
--- | HTML implementation.
-module Ondim.HTML where
+module Ondim.Targets.HTML.Instances where
 
 import Data.Char (isSpace)
 import Data.Text qualified as T
-import Ondim
-import Ondim.Extra.Expansions (Attribute, ExpansibleText, ignore, ifBound, switchBound, bind, scope, bindText, attrSub, HasAttrs)
-import Ondim.MultiWalk.Combinators (Conversible (convertFrom, convertTo), Converting, OneSub)
+import Ondim.Extra.Expansions (Attribute, ExpansibleText, HasAttrs)
+import Ondim.MultiWalk.Combinators
+  ( Conversible (convertFrom, convertTo),
+    Converting,
+    OneSub,
+    ToSpecList,
+  )
+import Ondim.MultiWalk.Core (OndimNode (..), OndimTag (..))
 import Text.XmlHtml qualified as X
-import Data.Map.Syntax ((##))
 
 -- | Ondim HTML tag. (Used for instances).
 data HtmlTag
@@ -86,24 +89,6 @@ instance OndimNode HtmlTag Attribute where
 -- | A hack, unfortunately.
 rawNode :: Text -> HtmlNode
 rawNode txt = Element False "to-be-removed" [("xmlhtmlRaw", "")] [TextNode txt]
-
-bindDefaults :: forall m t. Monad m =>
-  Ondim HtmlTag m t -> Ondim HtmlTag m t
-bindDefaults st = st
- `binding` do
-   "ignore" ## ignore @HtmlNode
-   "if" ## ifBound
-   "switch" ## switchBound
-   "bind" ## bind
-   "scope" ## scope
-   "bind-text" ## bindText nodeText
-  `bindingFilters` do
-    "attrSub" ## attrSub
-
--- * Template loading helpers
-
-fromDocument :: Monad m => Text -> X.Document -> Expansion HtmlTag m HtmlNode
-fromDocument name = fromTemplate name . fromNodeList . X.docContent
 
 -- * Valid html tags
 
