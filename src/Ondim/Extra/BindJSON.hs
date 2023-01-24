@@ -1,6 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Ondim.Extra.BindJSON (bindObject) where
+module Ondim.Extra.BindJSON
+  ( bindObject,
+    openObject,
+    bindArray,
+    listArray
+  )
+where
 
 import Data.Aeson
 import Data.Aeson.Key qualified as K
