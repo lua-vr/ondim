@@ -92,6 +92,11 @@ module Ondim
     All,
     Substructure,
     ContainsState (..),
+
+    -- * MapSyntax
+    MapSyntax,
+    MapSyntaxM,
+    (##)
   )
 where
 
@@ -99,13 +104,14 @@ import Control.Monad.Trans.MultiState.Strict (MultiStateT (..), runMultiStateTA,
 import Control.MultiWalk.HasSub (All, GSubTag, HasSub (..), SubSpec (..))
 import Data.HList.ContainsType (getHListElem, setHListElem)
 import Data.HList.HList (HList (..))
-import Data.Map.Syntax (MapSyntax, runMap, (##))
+import Data.Map.Syntax (MapSyntax, (##), MapSyntaxM, runMapSyntax')
 import Ondim.MultiState (mGets, mModify)
 import Ondim.MultiWalk.Combinators
 import Ondim.MultiWalk.Core
 import Relude.Extra.Lens
 import Relude.Extra.Map (delete, insert, keys, lookup)
 import Prelude hiding (All)
+import qualified Data.HashMap.Strict as Map
 
 -- | Initial global state
 initialOGS :: OndimGS tag m
@@ -243,7 +249,7 @@ withFilters :: (OndimNode tag t, Monad m) => Filters tag m t -> Ondim tag m a ->
 withFilters filt = withOndimS (\s -> s {filters = filt <> filters s})
 
 -- | "Bind" text expansions locally.
-withText :: Monad m => Map Text (Ondim tag m Text) -> Ondim tag m a -> Ondim tag m a
+withText :: Monad m => HashMap Text (Ondim tag m Text) -> Ondim tag m a -> Ondim tag m a
 withText exps = withOndimGS (\s -> s {textExpansions = exps <> textExpansions s})
 
 -- | "Unbind" an expansion locally.
@@ -272,13 +278,17 @@ type Expansions' tag m t = MapSyntax Text (Expansion tag m t)
 
 type Filters' tag m t = MapSyntax Text (Filter tag m t)
 
+runMapNoErrors :: (Eq k, Hashable k) => MapSyntaxM k v a -> HashMap k v
+runMapNoErrors = fromRight mempty .
+    runMapSyntax' (\_ new _ -> Just new) Map.lookup Map.insert
+
 -- | Convenience function to bind using MapSyntax.
 binding ::
   (OndimNode tag t, Monad m) =>
   Ondim tag m a ->
   Expansions' tag m t ->
   Ondim tag m a
-binding o exps = withExpansions (fromRight mempty (runMap exps)) o
+binding o exps = withExpansions (runMapNoErrors exps) o
 
 -- | Convenience function to bind using MapSyntax.
 bindingFilters ::
@@ -286,7 +296,7 @@ bindingFilters ::
   Ondim tag m a ->
   Filters' tag m t ->
   Ondim tag m a
-bindingFilters o filts = withFilters (fromRight mempty (runMap filts)) o
+bindingFilters o filts = withFilters (runMapNoErrors filts) o
 
 -- | Convenience function to bind using MapSyntax.
 bindingText ::
@@ -294,7 +304,7 @@ bindingText ::
   Ondim tag m a ->
   MapSyntax Text (Ondim tag m Text) ->
   Ondim tag m a
-bindingText o exps = withText (fromRight mempty (runMap exps)) o
+bindingText o exps = withText (runMapNoErrors exps) o
 
 children ::
   forall tag t.

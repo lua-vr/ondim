@@ -5,7 +5,7 @@ module Ondim.MultiWalk.Combinators where
 
 import Prelude hiding (All)
 import Control.MultiWalk.HasSub (SubSpec (..), GSubTag, HasSub)
-import Data.Map qualified as Map
+import Data.HashMap.Strict qualified as Map
 import Ondim.MultiWalk.Core (CanLift (..), modSubLift, Substructure (..), getSubstructure', modSubstructureM')
 
 -- * Instances
@@ -19,7 +19,7 @@ type BuildSpec x = 'SubSpec (CombinatorCarrier x) x
 type family CombinatorCarrier (b :: Type) :: Type where
   CombinatorCarrier (Under s a) = s
   CombinatorCarrier (MatchWith s a) = s
-  CombinatorCarrier (PairSub k v) = Map k v
+  CombinatorCarrier (PairSub k v) = HashMap k v
   CombinatorCarrier (OneSub a) = a
   CombinatorCarrier (Converting s a) = s
   CombinatorCarrier a = [a]
@@ -72,12 +72,12 @@ data PairSub k v
 
 instance
   ( c ~ CombinatorCarrier (PairSub k v),
-    Ord k,
+    Hashable k,
     CanLift tag (BuildSpec (k, v))
   ) =>
   CanLift tag ('SubSpec c (PairSub k v))
   where
-  liftSub (x :: Map k v) =
+  liftSub (x :: HashMap k v) =
     Map.fromList <$> liftSub @tag @(BuildSpec (k, v)) (Map.toList x)
 
 data OneSub a

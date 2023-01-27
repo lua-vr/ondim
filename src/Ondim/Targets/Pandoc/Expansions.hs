@@ -1,6 +1,5 @@
 module Ondim.Targets.Pandoc.Expansions where
 
-import Data.Map.Syntax ((##))
 import Data.Text qualified as T
 import Ondim
 import Ondim.Extra.Expansions

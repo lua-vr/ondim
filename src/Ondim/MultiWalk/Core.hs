@@ -9,7 +9,7 @@ import Control.Monad.Trans.MultiState.Strict (MultiStateT (..), mGet, runMultiSt
 import Control.MultiWalk.HasSub
 import Data.HList.ContainsType (ContainsType (..))
 import Data.HList.HList (HList (..))
-import Data.Map qualified as Map
+import Data.HashMap.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Typeable (TypeRep, typeRep)
 import Ondim.MultiState (mGets)
@@ -57,11 +57,11 @@ instance MonadTrans (Ondim tag) where
 
 type Filter tag m t = Ondim tag m [t] -> Ondim tag m [t]
 
-type Filters tag m t = Map Text (Filter tag m t)
+type Filters tag m t = HashMap Text (Filter tag m t)
 
 type Expansion tag (m :: Type -> Type) (t :: Type) = t -> Ondim tag m [t]
 
-type Expansions tag (m :: Type -> Type) (t :: Type) = Map Text (Expansion tag m t)
+type Expansions tag (m :: Type -> Type) (t :: Type) = HashMap Text (Expansion tag m t)
 
 -- | Ondim's state (one for each type)
 data OndimS tag (m :: Type -> Type) (t :: Type) = OndimS
@@ -83,7 +83,7 @@ instance Monoid (OndimS tag m t) where
 data OndimGS tag (m :: Type -> Type) = OndimGS
   { expansionDepth :: Int,
     expansionTrace :: [Text],
-    textExpansions :: Map Text (Ondim tag m Text)
+    textExpansions :: HashMap Text (Ondim tag m Text)
   }
   deriving (Generic)
 

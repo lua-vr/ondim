@@ -1,6 +1,5 @@
 module Ondim.Targets.HTML.Expansions where
 
-import Data.Map.Syntax ((##))
 import Ondim
 import Ondim.Extra.Expansions (attrSub, bind, bindText, ifBound, ignore, prefixed, scope, switchBound)
 import Ondim.Targets.HTML.Instances
