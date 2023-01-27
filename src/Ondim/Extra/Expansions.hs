@@ -30,8 +30,16 @@ class HasAttrs tag t where
 attributes ::
   forall t tag m.
   (HasAttrs tag t, OndimNode tag Attribute, Monad m, OndimTag tag) =>
-  t -> Ondim tag m [Attribute]
+  t ->
+  Ondim tag m [Attribute]
 attributes = liftNodes . getAttrs @tag
+
+lookupAttr ::
+  (Monad m, HasAttrs tag t, OndimNode tag Attribute, OndimTag tag) =>
+  Text ->
+  t ->
+  Ondim tag m (Maybe Text)
+lookupAttr key = fmap (L.lookup key) . attributes
 
 type HasAttrChild tag t =
   ( OndimNode tag t,
