@@ -10,6 +10,7 @@ import Control.MultiWalk.HasSub
 import Data.HList.ContainsType (ContainsType (..))
 import Data.HList.HList (HList (..))
 import Data.Map qualified as Map
+import Data.Text qualified as T
 import Data.Typeable (TypeRep, typeRep)
 import Ondim.MultiState (mGets)
 import Prelude hiding (All)
@@ -31,6 +32,8 @@ class
   type ExpTypes t :: [SubSpec]
   identify :: t -> Maybe Text
   identify _ = Nothing
+  rename :: Text -> t -> t
+  rename _ = id
   fromText :: Maybe (Text -> [t])
   fromText = Nothing
   validIdentifiers :: Maybe [Text]
@@ -140,19 +143,26 @@ liftNode ::
   (Monad m, OndimTag tag, OndimNode tag t) =>
   t ->
   Ondim tag m [t]
-liftNode node = do
+liftNode node =
   case identify @tag node of
     Just name ->
+      case T.stripSuffix "_" name of
+        Just name' -> do
+          let node' = rename @tag name' node
+          expand name' node' `catchError` \case
+            ExpansionNotBound {} -> pure []
+            x -> throwError x
+        Nothing -> expand name node
+    _ -> pure <$> liftSubstructures node
+  where
+    expand name node' =
       getExpansion name >>= \case
-        Just expansion -> expansion node
+        Just expansion -> expansion node'
         Nothing
           | Just valid <- validIdentifiers @tag @t,
             name `notElem` valid ->
               throwNotBound @t name
-          | otherwise -> pure <$> liftedNode
-    _ -> pure <$> liftedNode
-  where
-    liftedNode = liftSubstructures node
+          | otherwise -> pure <$> liftSubstructures node'
 {-# INLINEABLE liftNode #-}
 
 -- | Lift a list of nodes, applying filters.

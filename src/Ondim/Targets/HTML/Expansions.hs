@@ -19,5 +19,5 @@ bindDefaults st =
       "bind" ## bind
       "scope" ## scope
       "bind-text" ## bindText nodeText
-    `bindingFilters` prefixed "o:" do
+    `bindingFilters` do
       "attrSub" ## attrSub

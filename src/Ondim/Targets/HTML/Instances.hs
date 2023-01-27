@@ -74,6 +74,8 @@ instance OndimNode HtmlTag HtmlNode where
   type ExpTypes HtmlNode = ToSpecList '[Attribute, HtmlNode]
   identify (Element _ name _ _) = Just name
   identify _ = Nothing
+  rename name (Element x _ y z) = Element x name y z
+  rename _ x = x
   fromText = Just (one . TextNode)
   validIdentifiers = Just validHtmlTags
 
@@ -85,6 +87,7 @@ instance OndimNode HtmlTag ExpansibleText where
 instance OndimNode HtmlTag Attribute where
   type ExpTypes Attribute = ToSpecList '[OneSub ExpansibleText]
   identify (t, _) = Just t
+  rename name (_, x) = (name, x)
 
 -- | A hack, unfortunately.
 rawNode :: Text -> HtmlNode
