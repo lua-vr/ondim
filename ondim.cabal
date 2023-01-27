@@ -65,6 +65,7 @@ library
   if flag(with-json)
     exposed-modules: Ondim.Extra.BindJSON
     build-depends:   aeson
+                   , scientific
 
   if flag(with-pandoc)
     exposed-modules: Ondim.Targets.Pandoc

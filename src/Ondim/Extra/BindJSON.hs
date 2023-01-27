@@ -4,21 +4,22 @@ module Ondim.Extra.BindJSON
   ( bindObject,
     openObject,
     bindArray,
-    listArray
+    listArray,
   )
 where
 
 import Data.Aeson
 import Data.Aeson.Key qualified as K
 import Data.Map.Syntax (MapSyntaxM, (##))
-import Ondim (Expansion, Ondim, OndimNode, OndimTag, binding, bindingText, liftChildren)
-import Ondim.Extra.Expansions (prefixed)
+import Data.Scientific
+import Ondim (Expansion, Ondim, binding, bindingText, liftChildren)
+import Ondim.Extra.Expansions (HasAttrChild, lookupAttr, prefixed)
 import Relude.Extra (toPairs)
 
 toTextual :: Value -> Maybe (Text, Text)
 toTextual = \case
   String s -> Just (s, "string")
-  Number n -> Just (show n, "number")
+  Number n -> Just (prettyNum n, "number")
   Bool b -> Just (show b, "bool")
   Null -> Just ("", "null")
   _ -> Nothing
@@ -30,7 +31,7 @@ arrayTextMap name arr = prefixed name do
 
 arrayExpMap ::
   forall a tag m.
-  (Monad m, OndimNode tag a, OndimTag tag) =>
+  (Monad m, HasAttrChild tag a) =>
   Text ->
   Array ->
   MapSyntaxM Text (Expansion tag m a) ()
@@ -39,7 +40,7 @@ arrayExpMap name arr = prefixed name do
 
 bindArray ::
   forall t tag m a.
-  (Monad m, OndimTag tag, OndimNode tag t) =>
+  (Monad m, HasAttrChild tag t) =>
   Text ->
   Array ->
   Ondim tag m a ->
@@ -51,19 +52,20 @@ bindArray name arr env =
 
 listArray ::
   forall a tag m.
-  (Monad m, OndimNode tag a, OndimTag tag) =>
+  (Monad m, HasAttrChild tag a) =>
   Array ->
   Expansion tag m a
-listArray arr node =
+listArray arr node = do
+  alias <- fromMaybe "item" <$> lookupAttr "as" node
   join <$> forM (toList arr) \el ->
     liftChildren node
       `bindingText` do
         whenJust (toTextual el) \(v, t) -> do
-          "item" ## pure v
-          "item:type" ## pure t
+          alias ## pure v
+          alias <> ":type" ## pure t
       & case el of
-        Object o -> bindObject @a "item" o
-        Array o -> bindArray @a "item" o
+        Object o -> bindObject @a alias o
+        Array o -> bindArray @a alias o
         _ -> id
 
 objectTextMap :: Monad m => Text -> Object -> MapSyntaxM Text (m Text) ()
@@ -73,16 +75,18 @@ objectTextMap name obj = prefixed name do
 
 objectExpMap ::
   forall a tag m.
-  (Monad m, OndimNode tag a, OndimTag tag) =>
+  (Monad m, HasAttrChild tag a) =>
   Text ->
   Object ->
   MapSyntaxM Text (Expansion tag m a) ()
 objectExpMap name obj = prefixed name do
-  ":open" ## openObject obj
+  ":open" ## \node -> do
+    pfx <- lookupAttr "prefix" node
+    openObject @a pfx obj $ liftChildren node
 
 bindObject ::
   forall t tag m a.
-  (Monad m, OndimTag tag, OndimNode tag t) =>
+  (Monad m, HasAttrChild tag t) =>
   Text ->
   Object ->
   Ondim tag m a ->
@@ -93,13 +97,15 @@ bindObject name obj env =
     `binding` objectExpMap @t name obj
 
 openObject ::
-  forall a tag m.
-  (Monad m, OndimNode tag a, OndimTag tag) =>
+  forall t a tag m.
+  (Monad m, HasAttrChild tag t) =>
+  Maybe Text ->
   Object ->
-  Expansion tag m a
-openObject obj node =
-  liftChildren node
-    `bindingText` do
+  Ondim tag m a ->
+  Ondim tag m a
+openObject (maybe "" (<> ":") -> pfx) obj node =
+  node
+    `bindingText` prefixed pfx do
       forM_ (toPairs obj) \(K.toText -> k, v) -> do
         case v of
           Array a -> arrayTextMap k a
@@ -107,9 +113,14 @@ openObject obj node =
           _ -> whenJust (toTextual v) \(v', t) -> do
             k ## pure v'
             k <> ":type" ## pure t
-    `binding` do
+    `binding` prefixed pfx do
       forM_ (toPairs obj) \(K.toText -> k, v) -> do
         case v of
-          Array a -> arrayExpMap @a k a
-          Object o -> objectExpMap @a k o
+          Array a -> arrayExpMap @t k a
+          Object o -> objectExpMap @t k o
           _ -> pure ()
+
+prettyNum :: Scientific -> Text
+prettyNum x = case floatingOrInteger x of
+  Left (r :: Float) -> show r
+  Right (i :: Int) -> show i
