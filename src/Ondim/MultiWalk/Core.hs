@@ -183,7 +183,7 @@ liftNodes ::
   Ondim tag m [t]
 liftNodes nodes = do
   st <- stGet
-  foldr ($) (foldMapM (liftNode @tag) nodes) (filters st)
+  foldMapM (\x -> foldr ($) (liftNode @tag x) (filters st)) nodes
 
 modSubLift ::
   forall tag ls m t.
