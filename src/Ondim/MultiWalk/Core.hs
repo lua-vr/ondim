@@ -99,6 +99,7 @@ type MultiOndimS tag m = MultiOndimS' tag m (OndimTypes tag)
 data OndimException
   = MaxExpansionDepthExceeded [Text]
   | ExpansionNotBound Text TypeRep [Text]
+  | CustomException Text [Text]
   deriving (Show)
 
 instance Monad m => MonadError OndimException (Ondim tag m) where
@@ -115,6 +116,15 @@ throwNotBound ::
   Ondim tag m s
 throwNotBound name =
   throwError . ExpansionNotBound name (typeRep (Proxy @t))
+    =<< Ondim (mGets @(OndimGS tag m) expansionTrace)
+
+throwCustom ::
+  forall tag m s.
+  (Monad m) =>
+  Text ->
+  Ondim tag m s
+throwCustom name =
+  throwError . CustomException name
     =<< Ondim (mGets @(OndimGS tag m) expansionTrace)
 
 -- * Lifiting

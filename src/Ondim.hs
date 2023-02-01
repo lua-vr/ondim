@@ -45,6 +45,7 @@ module Ondim
     -- * Exceptions
     OndimException (..),
     throwNotBound,
+    throwCustom,
 
     -- * State transformations
 
