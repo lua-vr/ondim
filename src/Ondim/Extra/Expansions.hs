@@ -91,9 +91,11 @@ ifElse ::
   Bool ->
   Expansion tag m t
 ifElse cond node = do
-  els <- liftChildren node
-  let (yes, drop 1 -> no) =
-        break ((Just "else" ==) . identify @tag) els
+  let els = children @tag node
+      yes = filter ((Just "o:else" /=) . identify @tag) els
+      no =
+        maybe [] (children @tag) $
+          find ((Just "o:else" ==) . identify @tag) els
   if cond
     then liftNodes yes
     else liftNodes no
