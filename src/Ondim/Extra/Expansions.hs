@@ -41,6 +41,15 @@ lookupAttr ::
   Ondim tag m (Maybe Text)
 lookupAttr key = fmap (L.lookup key) . attributes
 
+lookupAttr' ::
+  (Monad m, HasAttrs tag t, OndimNode tag Attribute, OndimTag tag) =>
+  Text ->
+  t ->
+  Ondim tag m Text
+lookupAttr' key node =
+  maybe (throwCustom $ "Missing '" <> key <> "' argument.") pure . L.lookup key
+    =<< attributes node
+
 type HasAttrChild tag t =
   ( OndimNode tag t,
     OndimNode tag Attribute,
