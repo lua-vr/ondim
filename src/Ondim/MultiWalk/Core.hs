@@ -55,7 +55,7 @@ instance MonadTrans (Ondim tag) where
 
 -- * State data
 
-type Filter tag m t = [t] -> Ondim tag m [t]
+type Filter tag m t = Ondim tag m [t] -> Ondim tag m [t]
 
 type Filters tag m t = HashMap Text (Filter tag m t)
 
@@ -183,7 +183,7 @@ liftNodes ::
   Ondim tag m [t]
 liftNodes nodes = do
   st <- stGet
-  foldMapM (\x -> foldr (=<<) (liftNode @tag x) (filters st)) nodes
+  foldMapM (\x -> foldr ($) (liftNode @tag x) (filters st)) nodes
 
 modSubLift ::
   forall tag ls m t.
