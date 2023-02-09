@@ -211,4 +211,4 @@ attrEdit :: (OndimTag tag, Monad m) => Text -> Ondim tag m Text
 attrEdit = streamEditT interpParser callText
 
 attrSub :: (OndimTag tag, Monad m) => Filter tag m ExpansibleText
-attrSub = (mapM attrEdit =<<)
+attrSub = mapM attrEdit
