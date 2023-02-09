@@ -69,6 +69,19 @@ prefixed pfx = mapK (pfx <>)
 ignore :: forall t tag m. (OndimTag tag, Monad m) => Expansion tag m t
 ignore = const $ pure []
 
+with :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
+with node = do
+  tag <- lookupAttr' "exp" node
+  oldExp :: Expansion tag m t <-
+    maybe (throwNotBound @t tag) pure
+      =<< getExpansion tag
+  as <- lookupAttr' "as" node
+  noOverwrite <- isJust <$> lookupAttr "no-overwrite" node
+  exists <- isJust <$> getExpansion @t as
+  if noOverwrite && exists
+    then liftChildren node
+    else liftChildren node `binding` (as ## oldExp)
+
 ifElse ::
   forall t tag m.
   ( OndimNode tag t,
