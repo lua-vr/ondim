@@ -163,13 +163,13 @@ bind :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
 bind node = do
   attrs <- attributes node
   whenJust (getTag attrs) $ \name -> do
-    putExpansion name $ \inner ->
+    putExpansion name $ \inner -> do
+      attrs' <- attributes inner
       liftChildren node
         `binding` do
           name <> ":content" ## const (liftChildren inner)
-        `bindingText`
-          forM_ (getAttrs @tag inner) \attr -> do
-            name <> ":" <> fst attr ## pure (snd attr)
+        `bindingText` forM_ attrs' \attr -> do
+          name <> ":" <> fst attr ## pure (snd attr)
   pure []
 
 -- | This expansion works like Heist's `bind` splice, but binds what's inside as
