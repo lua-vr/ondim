@@ -106,9 +106,9 @@ getTag attrs = L.lookup "tag" attrs <|> (case attrs of [(s, "")] -> Just s; _ ->
 
 switchCases :: forall t tag m. (HasAttrChild tag t, Monad m) => Text -> Expansions' tag m t
 switchCases tag =
-  "case" ## \caseNode -> do
+  "o:case" ## \caseNode -> do
     attrs <- attributes caseNode
-    withoutExpansion @t "case" $
+    withoutExpansion @t "o:case" $
       if Just tag == getTag attrs
         then liftChildren caseNode
         else pure []
@@ -132,8 +132,8 @@ switchWithDefault tag node = do
   let els = children @tag node
   fromMaybe (pure []) do
     child <-
-      find (\x -> nameIs "case" x && hasTag x) els
-        <|> find (nameIs "default") els
+      find (\x -> nameIs "o:case" x && hasTag x) els
+        <|> find (nameIs "o:default") els
     pure $ liftChildren child
   where
     nameIs n x = identify @tag x == Just n
@@ -153,7 +153,7 @@ switchBound node = do
   tag <- getTag <$> attributes node
   flip (maybe $ pure []) tag \tag' -> do
     exp' <- getTextExpansion tag'
-    tagC <- fromMaybe (pure "default") exp'
+    tagC <- fromMaybe (pure "o:default") exp'
     switchWithDefault tagC node
 
 -- Binding
