@@ -56,6 +56,7 @@ module Ondim
     withExpansions,
     withoutExpansion,
     withoutExpansions,
+    filteringExpansions,
     putExpansion,
     getExpansion,
     callExpansion,
@@ -266,6 +267,10 @@ withoutExpansion name = withOndimS @t (\s -> s {expansions = delete name (expans
 -- | "Unbind" many expansions locally.
 withoutExpansions :: forall t tag m a. (OndimNode tag t, Monad m) => [Text] -> Ondim tag m a -> Ondim tag m a
 withoutExpansions names = withOndimS @t (\s -> s {expansions = foldr delete (expansions s) names})
+
+-- | Filter bound expansions by name.
+filteringExpansions :: forall t tag m a. (OndimNode tag t, Monad m) => (Text -> Bool) -> Ondim tag m a -> Ondim tag m a
+filteringExpansions p = withOndimS @t (\s -> s {expansions = Map.filterWithKey (const . p) (expansions s)})
 
 -- | "Unbind" a filter locally.
 withoutFilter :: forall t tag m a. (OndimNode tag t, Monad m) => Text -> Ondim tag m a -> Ondim tag m a
