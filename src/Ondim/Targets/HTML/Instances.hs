@@ -5,14 +5,12 @@ module Ondim.Targets.HTML.Instances where
 
 import Data.Char (isSpace)
 import Data.Text qualified as T
-import Ondim.Extra.Expansions (Attribute, ExpansibleText, HasAttrs)
 import Ondim.MultiWalk.Combinators
   ( Conversible (convertFrom, convertTo),
     Converting,
-    OneSub,
     ToSpecList,
   )
-import Ondim.MultiWalk.Core (OndimNode (..), OndimTag (..))
+import Ondim (OndimNode (..), OndimTag (..), Attribute)
 import Text.XmlHtml qualified as X
 
 -- | Ondim HTML tag. (Used for instances).
@@ -59,7 +57,7 @@ nodeText (TextNode t) = t
 nodeText el@Element {} = foldMap nodeText (elementChildren el)
 
 instance OndimTag HtmlTag where
-  type OndimTypes HtmlTag = '[X.Document, HtmlNode, Attribute, ExpansibleText]
+  type OndimTypes HtmlTag = '[X.Document, HtmlNode, Attribute, Text]
 
 deriving instance (Generic X.Document)
 
@@ -74,20 +72,7 @@ instance OndimNode HtmlTag HtmlNode where
   type ExpTypes HtmlNode = ToSpecList '[Attribute, HtmlNode]
   identify (Element _ name _ _) = Just name
   identify _ = Nothing
-  rename name (Element x _ y z) = Element x name y z
-  rename _ x = x
   fromText = Just (one . TextNode)
-  validIdentifiers = Just validHtmlTags
-
-instance HasAttrs HtmlTag HtmlNode
-
-instance OndimNode HtmlTag ExpansibleText where
-  type ExpTypes ExpansibleText = '[]
-
-instance OndimNode HtmlTag Attribute where
-  type ExpTypes Attribute = ToSpecList '[OneSub ExpansibleText]
-  identify (t, _) = Just t
-  rename name (_, x) = (name, x)
 
 -- | A hack, unfortunately.
 rawNode :: Text -> HtmlNode

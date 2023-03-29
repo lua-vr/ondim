@@ -33,20 +33,15 @@ bindDefaults ::
 bindDefaults st =
   st
     `binding` do
-      "if" ## ifBound @Block
-      "switch" ## switchBound
-      "bind" ## bind
-      "scope" ## scope
-      "bind-text" ## bindText stringify
+      "if" #* ifBound
+      "switch" #* switchBound
+      "bind" #* bind
+      "scope" #* scope
       "cons" ## cons
-    `binding` do
-      "if" ## ifBound @Inline
-      "switch" ## switchBound
-      "bind" ## bind
-      "scope" ## scope
-      "bind-text" ## bindText stringify
+      "bind-text" ## bindText (stringify @Block)
+      "bind-text" ## bindText (stringify @Inline)
     `bindingFilters` do
-      "attrSub" ## attrSub
+      "attrSub" $# attrSub
 
 -- Miscellaneous (from Text.Pandoc.Shared)
 

@@ -1,48 +1,36 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use uncurry" #-}
 
 -- | Uselful examples of expansions.
 module Ondim.Extra.Expansions where
 
+import Control.Monad.RWS (censor)
 import Data.Attoparsec.Text (Parser, char, string, takeTill)
+import Data.HashMap.Strict qualified as Map
 import Data.List qualified as L
-import Data.Map.Syntax
 import Ondim
+import Ondim.MultiWalk.Core (GlobalConstraints, SomeExpansion (TextData), toSomeExpansion)
 import Replace.Attoparsec.Text (streamEditT)
-
--- Alias for attributes
-
-type Attribute = (Text, Text)
-
-type ExpansibleText = Text
-
-class HasAttrs tag t where
-  getAttrs :: t -> [Attribute]
-  default getAttrs ::
-    ( OndimNode tag t,
-      Ondim.All (Substructure Attribute) (ExpTypes t)
-    ) =>
-    t ->
-    [Attribute]
-  getAttrs = getSubstructure @Attribute
 
 attributes ::
   forall t tag m.
-  (HasAttrs tag t, OndimNode tag Attribute, Monad m, OndimTag tag) =>
+  (OndimNode tag t, Monad m, OndimTag tag) =>
   t ->
   Ondim tag m [Attribute]
 attributes = liftNodes . getAttrs @tag
 
 lookupAttr ::
-  (Monad m, HasAttrs tag t, OndimNode tag Attribute, OndimTag tag) =>
+  (Monad m, OndimNode tag t, OndimTag tag) =>
   Text ->
   t ->
   Ondim tag m (Maybe Text)
 lookupAttr key = fmap (L.lookup key) . attributes
 
 lookupAttr' ::
-  (Monad m, HasAttrs tag t, OndimNode tag Attribute, OndimTag tag) =>
+  (Monad m, OndimNode tag t, OndimTag tag) =>
   Text ->
   t ->
   Ondim tag m Text
@@ -50,30 +38,24 @@ lookupAttr' key node =
   maybe (throwCustom $ "Missing '" <> key <> "' argument.") pure . L.lookup key
     =<< attributes node
 
-type HasAttrChild tag t =
-  ( OndimNode tag t,
-    OndimNode tag Attribute,
-    OndimTag tag,
-    HasAttrs tag t
-  )
-
 -- Adding prefixes
 
--- | Simple convenience function for prefixing expansion names, useful for
---   simulating namespaces.
-prefixed :: Text -> MapSyntax Text a -> MapSyntax Text a
-prefixed pfx = mapK (pfx <>)
+{- | Simple convenience function for prefixing expansion names, useful for
+   simulating namespaces.
+-}
+prefixed :: Text -> ExpansionMap tag m -> ExpansionMap tag m
+prefixed pfx = censor (Map.mapKeys (pfx <>))
 
 -- Expansions
 
 ignore :: forall t tag m. (OndimTag tag, Monad m) => Expansion tag m t
 ignore = const $ pure []
 
-with :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
+with :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
 with node = do
   tag <- lookupAttr' "exp" node
   oldExp :: Expansion tag m t <-
-    maybe (throwNotBound @t tag) pure
+    maybe (throwNotBound tag) pure
       =<< getExpansion tag
   as <- lookupAttr' "as" node
   noOverwrite <- isJust <$> lookupAttr "no-overwrite" node
@@ -104,11 +86,11 @@ ifElse cond node = do
 getTag :: [Attribute] -> Maybe Text
 getTag attrs = L.lookup "tag" attrs <|> (case attrs of [(s, "")] -> Just s; _ -> Nothing)
 
-switchCases :: forall t tag m. (HasAttrChild tag t, Monad m) => Text -> Expansions' tag m t
+switchCases :: forall t tag m. GlobalConstraints tag m t => Text -> ExpansionMap tag m
 switchCases tag =
   "o:case" ## \caseNode -> do
-    attrs <- attributes caseNode
-    withoutExpansion @t "o:case" $
+    attrs <- attributes @t caseNode
+    withoutExpansions ["o:case"] $
       if Just tag == getTag attrs
         then liftChildren caseNode
         else pure []
@@ -116,7 +98,7 @@ switchCases tag =
 
 switch ::
   forall tag m t.
-  (HasAttrChild tag t, Monad m) =>
+  GlobalConstraints tag m t =>
   Text ->
   Expansion tag m t
 switch tag node =
@@ -125,7 +107,7 @@ switch tag node =
 
 switchWithDefault ::
   forall tag m t.
-  (HasAttrChild tag t, Monad m) =>
+  GlobalConstraints tag m t =>
   Text ->
   Expansion tag m t
 switchWithDefault tag node = do
@@ -140,7 +122,7 @@ switchWithDefault tag node = do
     hasTag (getAttrs @tag -> attrs) =
       Just tag == getTag attrs
 
-ifBound :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
+ifBound :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
 ifBound node = do
   attrs <- attributes node
   bound <- case getTag attrs of
@@ -148,56 +130,60 @@ ifBound node = do
     Nothing -> pure False
   ifElse bound node
 
-switchBound :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
+switchBound :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
 switchBound node = do
   tag <- getTag <$> attributes node
   flip (maybe $ pure []) tag \tag' -> do
-    exp' <- getTextExpansion tag'
-    tagC <- fromMaybe (pure "o:default") exp'
+    tagC <- fromMaybe "o:default" <$> getTextData tag'
     switchWithDefault tagC node
 
 -- Binding
 
 -- | This expansion works like Heist's `bind` splice
-bind :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
+bind :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
 bind node = do
   attrs <- attributes node
   whenJust (getTag attrs) $ \name -> do
-    putExpansion name $ \inner -> do
+    putExpansion name $ toSomeExpansion $ \inner -> do
       attrs' <- attributes inner
       liftChildren node
         `binding` do
-          name <> ":content" ## const (liftChildren inner)
-        `bindingText` forM_ attrs' \attr -> do
-          name <> ":" <> fst attr ## pure (snd attr)
+          (name <> ":content") ## const (liftChildren inner)
+          forM_ attrs' \attr ->
+            name <> ":" <> fst attr #@ snd attr
   pure []
 
--- | This expansion works like Heist's `bind` splice, but binds what's inside as
---  text (via the toTxt parameter).
+{- | This expansion works like Heist's `bind` splice, but binds what's inside as
+  text (via the toTxt parameter).
+-}
 bindText ::
-  (HasAttrChild tag t, Monad m) =>
+  forall tag m t.
+  GlobalConstraints tag m t =>
   (t -> Text) ->
   Expansion tag m t
 bindText toTxt self = do
   attrs <- attributes self
   whenJust (getTag attrs) $ \tag -> do
-    putTextExpansion tag $ foldMap toTxt <$> liftChildren self
+    putExpansion tag $ TextData $ foldMap toTxt $ children @tag self
   pure []
 
--- | This expansion creates a new scope for the its children, in the sense that
--- the inner state does not leak outside.
---
---  For this reason, it can be used to call other expansions with "arguments":
---
---   > <bind animal-entry>There is a <animal /> with age <age /></bind>
---   >
---   > <scope>
---   >   <bind animal>Lion</bind>
---   >   <bind age>9 years</bind>
---   >   <animal-entry />
---   > <scope/>
-scope :: forall t tag m. (HasAttrChild tag t, Monad m) => Expansion tag m t
-scope = withOndimGS id . liftChildren
+{- | This expansion creates a new scope for the its children, in the sense that
+ the inner state does not leak outside.
+
+  For this reason, it can be used to call other expansions with "arguments":
+
+   > <bind animal-entry>There is a <animal /> with age <age /></bind>
+   >
+   > <scope>
+   >   <bind animal>Lion</bind>
+   >   <bind age>9 years</bind>
+   >   <animal-entry />
+   > <scope/>
+-}
+scope :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
+scope node = do
+  s <- getOndimS
+  liftChildren node <* putOndimS s
 
 -- | Substitution of !(name) in attribute text
 interpParser :: Parser Text
@@ -210,5 +196,5 @@ interpParser = do
 attrEdit :: (OndimTag tag, Monad m) => Text -> Ondim tag m Text
 attrEdit = streamEditT interpParser callText
 
-attrSub :: (OndimTag tag, Monad m) => Filter tag m ExpansibleText
+attrSub :: (OndimTag tag, Monad m) => Filter tag m Text
 attrSub = (mapM attrEdit =<<)

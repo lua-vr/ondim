@@ -1,9 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 
+{- | This module defines a user-friendly API over the core functionality
+ (implemented in Ondim.MultiWalk.Core).
+-}
 module Ondim
   ( -- * Classes
     OndimTag (..),
@@ -25,16 +28,7 @@ module Ondim
     Expansions,
     Filter,
     Filters,
-    OndimGS (..),
-    OndimS (..),
-    OndimMS,
-    -- Initial states
-    initialOGS,
-    initialOS,
-    ondimState,
-    ondimGState,
-    initialMS,
-    HasInitialMultiState,
+    OndimState (..),
 
     -- * Monad
     Ondim,
@@ -50,37 +44,31 @@ module Ondim
     -- * State transformations
 
     -- Expansions
-    Expansions',
+    ExpansionMap,
+    (##),
+    (#@),
+    (#*),
     binding,
     unbinding,
     withExpansions,
-    withoutExpansion,
     withoutExpansions,
-    filteringExpansions,
     putExpansion,
     getExpansion,
+    getTextData,
     callExpansion,
+    callText,
     -- Filters
-    Filters',
+    FilterMap,
+    ($#),
+    ($*),
     bindingFilters,
     unbindingFilters,
     withFilters,
-    withoutFilter,
     withoutFilters,
-    -- Text
-    bindingText,
-    unbindingText,
-    withText,
-    withoutText,
-    withoutTexts,
-    putTextExpansion,
-    getTextExpansion,
-    callText,
     -- State manipulation
-    getOndimMS,
-    putOndimMS,
-    withOndimGS,
-    withOndimS,
+    getOndimS,
+    putOndimS,
+    modifyOndimS,
 
     -- * Node lifting
     liftNode,
@@ -99,249 +87,159 @@ module Ondim
     -- * Auxiliary
     All,
     Substructure,
-    ContainsState (..),
-
-    -- * MapSyntax
-    MapSyntax,
-    MapSyntaxM,
-    (##),
+    Attribute,
   )
 where
 
-import Control.Monad.Trans.MultiState.Strict (MultiStateT (..), runMultiStateTA, runMultiStateTAS)
+import Control.Monad.Writer.CPS
 import Control.MultiWalk.HasSub (All, GSubTag, HasSub (..), SubSpec (..))
-import Data.HList.ContainsType (getHListElem, setHListElem)
-import Data.HList.HList (HList (..))
 import Data.HashMap.Strict qualified as Map
-import Data.Map.Syntax (MapSyntax, MapSyntaxM, runMapSyntax', (##))
-import Ondim.MultiState (mGets, mModify)
 import Ondim.MultiWalk.Combinators
 import Ondim.MultiWalk.Core
-import Relude.Extra.Lens
-import Relude.Extra.Map (delete, insert, keys, lookup)
 import Prelude hiding (All)
-
--- | Initial global state
-initialOGS :: OndimGS tag m
-initialOGS = OndimGS 0 [] mempty
-
--- | Initial state
-initialOS :: OndimS tag m t
-initialOS = OndimS mempty mempty
-
-ondimState :: forall tag m t. OndimNode tag t => Lens' (OndimMS tag m) (OndimS tag m t)
-ondimState = lens getMS setMS
-  where
-    setMS (OndimMS (gs :+: ms)) s = OndimMS $ gs :+: setState @(OndimTypes tag) s ms
-    getMS (OndimMS (_ :+: ms)) = getState @(OndimTypes tag) ms
-
-ondimGState :: forall tag m. Lens' (OndimMS tag m) (OndimGS tag m)
-ondimGState = lens getGS setGS
-  where
-    setGS (OndimMS ms) s = OndimMS $ setHListElem s ms
-    getGS (OndimMS ms) = getHListElem ms
-
--- | Newtype joining OndimS and OndimGS together into a "multistate".
-newtype OndimMS tag m = OndimMS (HList (OndimGS tag m : MultiOndimS tag m))
-  deriving (Generic)
-
--- Initial state
-
-class HasInitialMultiState (ls :: [Type]) where
-  initialOMS :: HList (MultiOndimS' tag m ls)
-
-instance HasInitialMultiState '[] where
-  initialOMS = HNil
-
-instance HasInitialMultiState ls => HasInitialMultiState (l : ls) where
-  initialOMS :: forall tag m. HList (MultiOndimS' tag m (l : ls))
-  initialOMS = initialOS :+: initialOMS @ls @tag @m
-
-class ConcatHLists (ls :: [Type]) where
-  concatHLists :: HList ls -> HList ls -> HList ls
-
-instance ConcatHLists '[] where
-  concatHLists _ _ = HNil
-
-instance (ConcatHLists ls, Monoid l) => ConcatHLists (l : ls) where
-  concatHLists (a :+: as) (b :+: bs) = (a <> b) :+: concatHLists as bs
-
-instance ConcatHLists (MultiOndimS tag m) => Semigroup (OndimMS tag m) where
-  OndimMS (s :+: x) <> OndimMS (_ :+: y) = OndimMS (s :+: concatHLists x y)
-
-initialMS :: forall tag m. HasInitialMultiState (OndimTypes tag) => OndimMS tag m
-initialMS = OndimMS (initialOGS :+: initialOMS @(OndimTypes tag) @tag @m)
 
 -- | Runs the Ondim action with a given initial state.
 evalOndimTWith ::
-  forall tag m a.
   Monad m =>
-  OndimMS tag m ->
+  OndimState tag m ->
   Ondim tag m a ->
   m (Either OndimException a)
-evalOndimTWith (OndimMS s) o =
+evalOndimTWith s o =
   runExceptT $
-    runMultiStateTA s (unOndimT o)
+    unOndimT o
+      `runReaderT` initialGS
+      `evalStateT` s
 
 runOndimTWith ::
-  forall tag m a.
   Monad m =>
-  OndimMS tag m ->
+  OndimState tag m ->
   Ondim tag m a ->
-  m (Either OndimException (a, OndimMS tag m))
-runOndimTWith (OndimMS s) o =
+  m (Either OndimException (a, OndimState tag m))
+runOndimTWith s o =
   runExceptT $
-    second OndimMS
-      <$> runMultiStateTAS s (unOndimT o)
+    unOndimT o
+      `runReaderT` initialGS
+      `runStateT` s
 
 -- | Runs the Ondim action with empty initial state.
-evalOndimT ::
-  forall tag m a.
-  ( HasInitialMultiState (OndimTypes tag),
-    Monad m
-  ) =>
-  Ondim tag m a ->
-  m (Either OndimException a)
-evalOndimT = evalOndimTWith initialMS
+evalOndimT :: Monad m => Ondim tag m a -> m (Either OndimException a)
+evalOndimT = evalOndimTWith mempty
 
 -- State manipulation
 
-getOndimMS :: Monad m => Ondim tag m (OndimMS tag m)
-getOndimMS = OndimMS <$> Ondim (MultiStateT get)
+getOndimS :: Monad m => Ondim tag m (OndimState tag m)
+getOndimS = Ondim get
 
-putOndimMS :: Monad m => OndimMS tag m -> Ondim tag m ()
-putOndimMS (OndimMS s) = Ondim (MultiStateT (put s))
+modifyOndimS :: Monad m => (OndimState tag m -> OndimState tag m) -> Ondim tag m ()
+modifyOndimS = Ondim . modify'
 
-withOndimGS ::
-  Monad m =>
-  (OndimGS tag m -> OndimGS tag m) ->
-  Ondim tag m a ->
-  Ondim tag m a
-withOndimGS f st =
-  Ondim $ MultiStateT $ StateT $ \s@(os :+: ms) ->
-    (,s) <$> runMultiStateTA (f os :+: ms) (unOndimT st)
-{-# INLINEABLE withOndimGS #-}
+putOndimS :: Monad m => OndimState tag m -> Ondim tag m ()
+putOndimS = Ondim . put
 
--- | This function works like @withReaderT@, in the sense that it creates a new
---   scope for the state in which state changes do not leak outside.
-withOndimS ::
-  forall t tag m a.
-  (Monad m, OndimNode tag t) =>
-  (OndimS tag m t -> OndimS tag m t) ->
-  Ondim tag m a ->
-  Ondim tag m a
-withOndimS f st =
-  Ondim $ MultiStateT $ StateT $ \s@(os :+: ms) ->
-    (,s)
-      <$> runMultiStateTA
-        (os :+: setState @(OndimTypes tag) (f $ getState @(OndimTypes tag) ms) ms)
-        (unOndimT st)
-{-# INLINEABLE withOndimS #-}
-
-getTextExpansion ::
+bindingLocally ::
   Monad m =>
   Text ->
-  Ondim tag m (Maybe (Ondim tag m Text))
-getTextExpansion k = expCtx k (Ondim $ mGets $ lookup k . textExpansions)
+  Maybe (SomeExpansion tag m) ->
+  Ondim tag m a ->
+  Ondim tag m a
+bindingLocally name ex st = do
+  pEx <- Ondim $ gets (Map.lookup name . expansions)
+  Ondim $ modify' \s -> s {expansions = insOrDel ex (expansions s)}
+  st <* modifyOndimS \s -> s {expansions = insOrDel pEx (expansions s)}
+  where
+    insOrDel = maybe (Map.delete name) (Map.insert name)
+
+bindingFilterLocally ::
+  Monad m =>
+  Text ->
+  Maybe (SomeFilter tag m) ->
+  Ondim tag m a ->
+  Ondim tag m a
+bindingFilterLocally name ex st = do
+  pEx <- Ondim $ gets (Map.lookup name . filters)
+  Ondim $ modify' \s -> s {filters = insOrDel ex (filters s)}
+  st <* modifyOndimS \s -> s {filters = insOrDel pEx (filters s)}
+  where
+    insOrDel = maybe (Map.delete name) (Map.insert name)
 
 -- | "Bind" new expansions locally.
-withExpansions :: (OndimNode tag t, Monad m) => Expansions tag m t -> Ondim tag m a -> Ondim tag m a
-withExpansions exps =
-  withOndimGS (\s -> s {textExpansions = foldr delete (textExpansions s) names})
-    . withOndimS (\s -> s {expansions = exps <> expansions s})
-  where
-    names = keys exps
+withExpansions :: Monad m => Expansions tag m -> Ondim tag m a -> Ondim tag m a
+withExpansions exps o = foldr (\(k, v) -> bindingLocally k (Just v)) o (Map.toList exps)
 
 -- | "Bind" filters locally.
-withFilters :: (OndimNode tag t, Monad m) => Filters tag m t -> Ondim tag m a -> Ondim tag m a
-withFilters filt = withOndimS (\s -> s {filters = filt <> filters s})
-
--- | "Bind" text expansions locally.
-withText :: Monad m => HashMap Text (Ondim tag m Text) -> Ondim tag m a -> Ondim tag m a
-withText exps = withOndimGS (\s -> s {textExpansions = exps <> textExpansions s})
-
--- | "Unbind" an expansion locally.
-withoutExpansion :: forall t tag m a. (OndimNode tag t, Monad m) => Text -> Ondim tag m a -> Ondim tag m a
-withoutExpansion name = withOndimS @t (\s -> s {expansions = delete name (expansions s)})
+withFilters :: Monad m => Filters tag m -> Ondim tag m a -> Ondim tag m a
+withFilters filt o = foldr (\(k, v) -> bindingFilterLocally k (Just v)) o (Map.toList filt)
 
 -- | "Unbind" many expansions locally.
-withoutExpansions :: forall t tag m a. (OndimNode tag t, Monad m) => [Text] -> Ondim tag m a -> Ondim tag m a
-withoutExpansions names = withOndimS @t (\s -> s {expansions = foldr delete (expansions s) names})
+withoutExpansions :: Monad m => [Text] -> Ondim tag m a -> Ondim tag m a
+withoutExpansions names o = foldr (`bindingLocally` Nothing) o names
 
--- | Filter bound expansions by name.
-filteringExpansions :: forall t tag m a. (OndimNode tag t, Monad m) => (Text -> Bool) -> Ondim tag m a -> Ondim tag m a
-filteringExpansions p = withOndimS @t (\s -> s {expansions = Map.filterWithKey (const . p) (expansions s)})
-
--- | "Unbind" a filter locally.
-withoutFilter :: forall t tag m a. (OndimNode tag t, Monad m) => Text -> Ondim tag m a -> Ondim tag m a
-withoutFilter name = withOndimS @t (\s -> s {filters = delete name (filters s)})
-
--- | "Unbind" many filters locally.
-withoutFilters :: forall t tag m a. (OndimNode tag t, Monad m) => [Text] -> Ondim tag m a -> Ondim tag m a
-withoutFilters names = withOndimS @t (\s -> s {filters = foldr delete (filters s) names})
-
--- | "Unbind" a text expansion locally.
-withoutText :: Monad m => Text -> Ondim tag m a -> Ondim tag m a
-withoutText name = withOndimGS (\s -> s {textExpansions = delete name (textExpansions s)})
-
--- | "Unbind" many text expansions locally.
-withoutTexts :: Monad m => [Text] -> Ondim tag m a -> Ondim tag m a
-withoutTexts names = withOndimGS (\s -> s {textExpansions = foldr delete (textExpansions s) names})
+-- | "Unbind" many expansions locally.
+withoutFilters :: Monad m => [Text] -> Ondim tag m a -> Ondim tag m a
+withoutFilters names o = foldr (`bindingFilterLocally` Nothing) o names
 
 -- | Put a new expansion into the local state, modifying the scope.
-putExpansion :: (OndimNode tag t, Monad m) => Text -> Expansion tag m t -> Ondim tag m ()
-putExpansion key exps =
-  stModify (\s -> s {expansions = insert key exps (expansions s)})
+putExpansion :: Monad m => Text -> SomeExpansion tag m -> Ondim tag m ()
+putExpansion key ex =
+  modifyOndimS \s -> s {expansions = Map.insert key ex (expansions s)}
 
--- | Put a new expansion into the local state, modifying the scope.
-putTextExpansion :: Monad m => Text -> Ondim tag m Text -> Ondim tag m ()
-putTextExpansion key exps =
-  Ondim $ mModify (\s -> s {textExpansions = insert key exps (textExpansions s)})
+type ExpansionMap tag m = Writer (HashMap Text (SomeExpansion tag m)) ()
 
-type Expansions' tag m t = MapSyntax Text (Expansion tag m t)
+infixr 0 #<>
 
-type Filters' tag m t = MapSyntax Text (Filter tag m t)
+(#<>) :: Text -> m -> Writer (HashMap Text m) ()
+name #<> ex = tell $ Map.singleton name ex
 
-runMapNoErrors :: (Eq k, Hashable k) => MapSyntaxM k v a -> HashMap k v
-runMapNoErrors =
-  fromRight mempty
-    . runMapSyntax' (\_ new _ -> Just new) Map.lookup Map.insert
+infixr 0 ##
+
+(##) :: Typeable t => Text -> Expansion tag m t -> ExpansionMap tag m
+name ## ex = name #<> toSomeExpansion ex
+
+infixr 0 #@
+
+(#@) :: Text -> Text -> ExpansionMap tag m
+name #@ ex = name #<> TextData ex
+
+infixr 0 #*
+
+(#*) :: Text -> GlobalExpansion tag m -> ExpansionMap tag m
+name #* ex = name #<> GlobalExpansion ex
+
+type FilterMap tag m = Writer (HashMap Text (SomeFilter tag m)) ()
+
+infixr 0 $#
+
+($#) :: Typeable t => Text -> Filter tag m t -> FilterMap tag m
+name $# ex = name #<> toSomeFilter ex
+
+infixr 0 $*
+
+($*) :: Typeable t => Text -> Filter tag m t -> FilterMap tag m
+name $* ex = name #<> toSomeFilter ex
 
 -- | Infix version of @withExpansions@ to bind using MapSyntax.
 binding ::
-  (OndimNode tag t, Monad m) =>
+  Monad m =>
   Ondim tag m a ->
-  Expansions' tag m t ->
+  ExpansionMap tag m ->
   Ondim tag m a
-binding o exps = withExpansions (runMapNoErrors exps) o
+binding o exps = withExpansions (execWriter exps) o
 
 -- | Infix version of @withFilters@ to bind using MapSyntax.
 bindingFilters ::
-  (OndimNode tag t, Monad m) =>
-  Ondim tag m a ->
-  Filters' tag m t ->
-  Ondim tag m a
-bindingFilters o filts = withFilters (runMapNoErrors filts) o
-
--- | Infix version of @withText@ to bind using MapSyntax.
-bindingText ::
   Monad m =>
   Ondim tag m a ->
-  MapSyntax Text (Ondim tag m Text) ->
+  FilterMap tag m ->
   Ondim tag m a
-bindingText o exps = withText (runMapNoErrors exps) o
+bindingFilters o filts = withFilters (execWriter filts) o
 
 -- | Infix version of @withoutExpansions@ to unbind many expansions locally.
-unbinding :: forall t tag m a. (OndimNode tag t, Monad m) => Ondim tag m a -> [Text] -> Ondim tag m a
-unbinding = flip (withoutExpansions @t)
+unbinding :: Monad m => Ondim tag m a -> [Text] -> Ondim tag m a
+unbinding = flip withoutExpansions
 
 -- | Infix version of @withoutFilters@ to unbind many filters locally.
-unbindingFilters :: forall t tag m a. (OndimNode tag t, Monad m) => Ondim tag m a -> [Text] -> Ondim tag m a
-unbindingFilters = flip (withoutFilters @t)
-
--- | Infix version of @withoutTexts@ to unbind many text expansions locally.
-unbindingText :: Monad m => Ondim tag m a -> [Text] -> Ondim tag m a
-unbindingText = flip withoutTexts
+unbindingFilters :: Monad m => Ondim tag m a -> [Text] -> Ondim tag m a
+unbindingFilters = flip withoutFilters
 
 children ::
   forall tag t.
@@ -374,13 +272,13 @@ fromTemplate name tpl inner =
     name <> ":content" ## const (liftChildren inner)
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
-callExpansion :: forall t tag m. (OndimNode tag t, Monad m) => Text -> Expansion tag m t
+callExpansion :: forall t tag m. GlobalConstraints tag m t => Text -> Expansion tag m t
 callExpansion name arg = do
   exps <- getExpansion name
-  maybe (throwNotBound @t name) ($ arg) exps
+  maybe (throwNotBound name) ($ arg) exps
 
-callText ::
-  Monad m =>
-  Text ->
-  Ondim tag m Text
-callText k = fromMaybe (throwNotBound @Text k) =<< getTextExpansion k
+-- | Either applies expansion 'name', or throws an error if it does not exist.
+callText :: forall tag m. Monad m => Text -> Ondim tag m Text
+callText name = do
+  exps <- getTextData name
+  maybe (throwNotBound name) pure exps
