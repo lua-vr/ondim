@@ -3,11 +3,12 @@ module Ondim.Targets.Pandoc.Load where
 import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
+import Data.HashMap.Strict (insert)
 import Ondim
 import Ondim.Extra.Expansions (ignore)
 import Ondim.Extra.Loading
+import Ondim.MultiWalk.Core (toSomeExpansion)
 import Ondim.Targets.Pandoc.Instances
-import Relude.Extra (delete, insert, (%~))
 import Text.Pandoc (def, pandocExtensions, readMarkdown, readerExtensions, renderError, runPure)
 import Text.Pandoc.Definition
 
@@ -21,23 +22,15 @@ loadTemplatesDynamic ::
   forall m n.
   (Monad n, MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   [FilePath] ->
-  m (OndimMS PandocTag n, (OndimMS PandocTag n -> m ()) -> m ())
+  m (OndimState PandocTag n, (OndimState PandocTag n -> m ()) -> m ())
 loadTemplatesDynamic =
-  loadTemplatesDynamic' patts ins del
+  loadTemplatesDynamic' patts ins
   where
     patts = [(InlineTpl, "**/*.inl.md"), (BlockTpl, "**/*.blk.md")]
-    ins InlineTpl name (loadPandoc (inlineFromDocument name) -> tpl) =
-      ondimState
-        %~ (\s -> s {expansions = insert name tpl (expansions s)})
-    ins BlockTpl name (loadPandoc (blockFromDocument name) -> tpl) =
-      ondimState
-        %~ (\s -> s {expansions = insert name tpl (expansions s)})
-    del InlineTpl name =
-      ondimState @PandocTag @n @Inline
-        %~ (\s -> s {expansions = delete name (expansions s)})
-    del BlockTpl name =
-      ondimState @PandocTag @n @Block
-        %~ (\s -> s {expansions = delete name (expansions s)})
+    ins InlineTpl name (loadPandoc (inlineFromDocument name) -> tpl) s =
+      s {expansions = insert name (toSomeExpansion tpl) (expansions s)}
+    ins BlockTpl name (loadPandoc (blockFromDocument name) -> tpl) s =
+      s {expansions = insert name (toSomeExpansion tpl) (expansions s)}
     loadPandoc f txt =
       either
         (throw . TemplateLoadingException . toString . renderError)
@@ -48,7 +41,7 @@ loadTemplatesDynamic =
               (decodeUtf8 txt :: Text)
         )
 
-loadTemplates :: Monad n => [FilePath] -> IO (OndimMS PandocTag n)
+loadTemplates :: Monad n => [FilePath] -> IO (OndimState PandocTag n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
 
 -- Template loading helpers

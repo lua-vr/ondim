@@ -6,18 +6,18 @@ import Ondim.Targets.HTML.Instances
 
 bindDefaults ::
   forall m t.
-  Monad m =>
+  (Monad m, OndimNode HtmlTag t) =>
   Ondim HtmlTag m t ->
   Ondim HtmlTag m t
 bindDefaults st =
   st
     `binding` prefixed "o:" do
-      "ignore" ## ignore @HtmlNode
-      "if" ## ifBound
-      "match" ## switchBound
-      "bind" ## bind
-      "scope" ## scope
+      "ignore" #* ignore
+      "if" #* ifBound
+      "match" #* switchBound
+      "bind" #* bind
+      "scope" #* scope
       "bind-text" ## bindText nodeText
-      "with" ## with
+      "with" #* with
     `bindingFilters` do
-      "attrSub" ## attrSub
+      "attrSub" $# attrSub

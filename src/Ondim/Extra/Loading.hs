@@ -2,9 +2,10 @@ module Ondim.Extra.Loading where
 
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
+import Data.HashMap.Strict qualified as Map
 import Ondim
 import Relude.Extra (minimumOn1, toPairs)
-import System.FilePath (splitDirectories, dropExtensions, (</>))
+import System.FilePath (dropExtensions, splitDirectories, (</>))
 import System.FilePattern (FilePattern)
 import System.UnionMount
 
@@ -14,33 +15,33 @@ newtype TemplateLoadingError = TemplateLoadingException String
 
 loadTemplatesDynamic' ::
   forall m n tplTypes tag.
-  (OndimTag tag, Ord tplTypes, HasInitialMultiState (OndimTypes tag)) =>
+  (OndimTag tag, Ord tplTypes) =>
   (MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   -- | Patterns to look for.
   [(tplTypes, FilePattern)] ->
   -- | Insertion
-  (tplTypes -> Text -> ByteString -> OndimMS tag n -> OndimMS tag n) ->
-  -- | Deletion
-  (tplTypes -> Text -> OndimMS tag n -> OndimMS tag n) ->
+  (tplTypes -> Text -> ByteString -> OndimState tag n -> OndimState tag n) ->
   -- | Places to look for templates, in descending order of priority.
   [FilePath] ->
-  m (OndimMS tag n, (OndimMS tag n -> m ()) -> m ())
-loadTemplatesDynamic' patts ins del places =
+  m (OndimState tag n, (OndimState tag n -> m ()) -> m ())
+loadTemplatesDynamic' patts ins places =
   let sources = fromList (zip (zip [1 ..] places) places)
       patterns = patts
       exclude = []
-      initial = initialMS
-      handler :: Change (Int, FilePath) tplTypes -> m (OndimMS tag n -> OndimMS tag n)
+      initial = mempty
+      handler :: Change (Int, FilePath) tplTypes -> m (OndimState tag n -> OndimState tag n)
       handler chg =
         appEndo . mconcat . coerce . join
           <$> forM (toPairs chg) \(tplType, chg') ->
             forM (toPairs chg') \(file, fa) ->
               let name =
                     fromString $
-                      intercalate ":" $ splitDirectories $ dropExtensions file
+                      intercalate ":" $
+                        splitDirectories $
+                          dropExtensions file
                in case fa of
                     Refresh _ ls ->
                       let dir = snd $ minimumOn1 fst (fst <$> ls)
                        in ins tplType name <$> readFileBS (dir </> file)
-                    Delete -> pure $ del tplType name
+                    Delete -> pure \s -> s {expansions = Map.delete name (expansions s)}
    in unionMount sources patterns exclude initial handler
