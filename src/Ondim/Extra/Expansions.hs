@@ -1,33 +1,19 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 {-# HLINT ignore "Use uncurry" #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 -- | Uselful examples of expansions.
 module Ondim.Extra.Expansions where
 
-import Control.Monad.RWS (censor)
+import Control.Monad.Except (MonadError (throwError), catchError, throwError)
 import Data.Attoparsec.Text (Parser, char, string, takeTill)
 import Data.HashMap.Strict qualified as Map
 import Data.List qualified as L
+import Data.Text qualified as T
 import Ondim
-import Ondim.MultiWalk.Core (GlobalConstraints, SomeExpansion (TextData), toSomeExpansion)
+import Relude.Extra.Map (notMember)
 import Replace.Attoparsec.Text (streamEditT)
-
-attributes ::
-  forall t tag m.
-  (OndimNode tag t, Monad m, OndimTag tag) =>
-  t ->
-  Ondim tag m [Attribute]
-attributes = liftNodes . getAttrs @tag
-
-lookupAttr ::
-  (Monad m, OndimNode tag t, OndimTag tag) =>
-  Text ->
-  t ->
-  Ondim tag m (Maybe Text)
-lookupAttr key = fmap (L.lookup key) . attributes
 
 lookupAttr' ::
   (Monad m, OndimNode tag t, OndimTag tag) =>
@@ -38,31 +24,49 @@ lookupAttr' key node =
   maybe (throwCustom $ "Missing '" <> key <> "' argument.") pure . L.lookup key
     =<< attributes node
 
--- Adding prefixes
-
-{- | Simple convenience function for prefixing expansion names, useful for
-   simulating namespaces.
--}
-prefixed :: Text -> ExpansionMap tag m -> ExpansionMap tag m
-prefixed pfx = censor (Map.mapKeys (pfx <>))
-
--- Expansions
+-- * Expansions
 
 ignore :: forall t tag m. (OndimTag tag, Monad m) => Expansion tag m t
 ignore = const $ pure []
 
-with :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
+debug :: GlobalExpansion tag m
+debug node = do
+  exps <- expansions <$> getOndimS
+  let go (Expansions e) = (`foldMap` Map.toList e) \(k, v) ->
+        case v of
+          Namespace m -> (k, "Namespace") : map (first ((k <> ".") <>)) (go m)
+          SomeExpansion {} -> one (k, "SomeExpansion")
+          GlobalExpansion {} -> one (k, "GlobalExpansion")
+          TextData {} -> one (k, "TextData")
+      keys = go exps
+  join <$> forM keys \(key, kind) ->
+    liftChildren node `binding` do
+      "key" #@ key
+      "kind" #@ kind
+
+open :: GlobalExpansion tag m
+open node = do
+  name' <- viaNonEmpty (fst . head) <$> attributes node
+  name <- maybe (throwCustom "Expansion name not provided.") pure name'
+  exps <- lookupExpansion name . expansions <$> getOndimS
+  withExpansion name Nothing $
+    case exps of
+      Just (Namespace v) -> withExpansions v $ liftChildren node
+      _ -> throwNotBound name
+
+with :: GlobalExpansion tag m
 with node = do
-  tag <- lookupAttr' "exp" node
-  oldExp :: Expansion tag m t <-
-    maybe (throwNotBound tag) pure
-      =<< getExpansion tag
-  as <- lookupAttr' "as" node
+  name' <- viaNonEmpty (fst . head) <$> attributes node
+  name <- maybe (throwCustom "Expansion name not provided.") pure name'
+  exps <- expansions <$> getOndimS
+  as <- fromMaybe "this" <$> lookupAttr "as" node
   noOverwrite <- isJust <$> lookupAttr "no-overwrite" node
-  exists <- isJust <$> getExpansion @t as
-  if noOverwrite && exists
-    then liftChildren node
-    else liftChildren node `binding` (as ## oldExp)
+  let expansion = lookupExpansion name exps
+      exists = isJust $ lookupExpansion as exps
+  withExpansion name Nothing $
+    if noOverwrite && exists
+      then liftChildren node
+      else withExpansion as expansion $ liftChildren node
 
 ifElse ::
   forall t tag m.
@@ -86,9 +90,9 @@ ifElse cond node = do
 getTag :: [Attribute] -> Maybe Text
 getTag attrs = L.lookup "tag" attrs <|> (case attrs of [(s, "")] -> Just s; _ -> Nothing)
 
-switchCases :: forall t tag m. GlobalConstraints tag m t => Text -> ExpansionMap tag m
+switchCases :: forall tag m. Text -> ExpansionMap tag m
 switchCases tag =
-  "o:case" ## \caseNode -> do
+  "o:case" #* \(caseNode :: t) -> do
     attrs <- attributes @t caseNode
     withoutExpansions ["o:case"] $
       if Just tag == getTag attrs
@@ -103,7 +107,8 @@ switch ::
   Expansion tag m t
 switch tag node =
   liftChildren node
-    `binding` switchCases @t tag
+    `binding` switchCases tag
+{-# INLINEABLE switch #-}
 
 switchWithDefault ::
   forall tag m t.
@@ -148,23 +153,23 @@ bind node = do
       attrs' <- attributes inner
       liftChildren node
         `binding` do
-          (name <> ":content") ## const (liftChildren inner)
+          "this.children" ## const (liftChildren inner)
           forM_ attrs' \attr ->
-            name <> ":" <> fst attr #@ snd attr
+            "this." <> fst attr #@ snd attr
   pure []
 
 {- | This expansion works like Heist's `bind` splice, but binds what's inside as
   text (via the toTxt parameter).
 -}
 bindText ::
-  forall tag m t.
   GlobalConstraints tag m t =>
   (t -> Text) ->
   Expansion tag m t
 bindText toTxt self = do
   attrs <- attributes self
+  child <- liftChildren self
   whenJust (getTag attrs) $ \tag -> do
-    putExpansion tag $ TextData $ foldMap toTxt $ children @tag self
+    putExpansion tag $ TextData $ foldMap toTxt child
   pure []
 
 {- | This expansion creates a new scope for the its children, in the sense that
@@ -185,6 +190,8 @@ scope node = do
   s <- getOndimS
   liftChildren node <* putOndimS s
 
+-- * Filters
+
 -- | Substitution of !(name) in attribute text
 interpParser :: Parser Text
 interpParser = do
@@ -197,4 +204,26 @@ attrEdit :: (OndimTag tag, Monad m) => Text -> Ondim tag m Text
 attrEdit = streamEditT interpParser callText
 
 attrSub :: (OndimTag tag, Monad m) => Filter tag m Text
-attrSub = (mapM attrEdit =<<)
+attrSub t _ = one <$> attrEdit t
+
+notBoundFilter :: forall t tag m. (GlobalConstraints tag m t) => Set Text -> Filter tag m t
+notBoundFilter validIds original nodes
+  | any (("@try" ==) . fst) (getAttrs @tag original) =
+      result `catchError` \case
+        ExpansionNotBound {} -> return []
+        e -> throwError e
+  | otherwise = result
+  where
+    result =
+      nodes >>= mapM \node ->
+        case identify @tag node of
+          Just name | name `notMember` validIds -> throwNotBound name
+          _ -> return node
+
+mbAttrFilter :: Monad m => Filter tag m Attribute
+mbAttrFilter (k, _) x
+  | Just k' <- "?" `T.stripSuffix` k =
+      first (const k') <<$>> x `catchError` \case
+        ExpansionNotBound {} -> return []
+        e -> throwError e
+  | otherwise = x

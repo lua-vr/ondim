@@ -1,9 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-{-# LANGUAGE ConstraintKinds #-}
 
 module Ondim.MultiWalk.Core
   ( Ondim (..),
@@ -22,7 +23,11 @@ module Ondim.MultiWalk.Core
     GlobalExpansion,
     SomeExpansion (..),
     toSomeExpansion,
-    Expansions,
+    splitExpansionKey,
+    lookupExpansion,
+    insertExpansion,
+    deleteExpansion,
+    Expansions (..),
     getExpansion,
     getTextData,
     Filter,
@@ -45,6 +50,7 @@ where
 import Control.Monad.Except (MonadError (..))
 import Control.MultiWalk.HasSub
 import Data.HashMap.Strict qualified as Map
+import Data.Text qualified as T
 import Type.Reflection (TypeRep, eqTypeRep, typeRep, type (:~~:) (HRefl))
 import Prelude hiding (All)
 
@@ -102,11 +108,15 @@ newtype Ondim tag m a = Ondim
 instance MonadTrans (Ondim tag) where
   lift = Ondim . lift . lift . lift
 
+instance MonadState s m => MonadState s (Ondim tag m) where
+  get = lift get
+  put x = lift (put x)
+
 -- * State data
 
 type GlobalConstraints tag m t = (OndimNode tag t, OndimTag tag, Monad m)
 
-type Filter tag m t = Ondim tag m [t] -> Ondim tag m [t]
+type Filter tag m t = t -> Ondim tag m [t] -> Ondim tag m [t]
 
 type GlobalFilter tag m = forall a. GlobalConstraints tag m a => Filter tag m a
 
@@ -135,6 +145,7 @@ data SomeExpansion tag m where
   SomeExpansion :: TypeRep a -> Expansion tag m a -> SomeExpansion tag m
   GlobalExpansion :: GlobalExpansion tag m -> SomeExpansion tag m
   TextData :: Text -> SomeExpansion tag m
+  Namespace :: Expansions tag m -> SomeExpansion tag m
 
 toSomeExpansion :: Typeable a => Expansion tag m a -> SomeExpansion tag m
 toSomeExpansion = SomeExpansion typeRep
@@ -151,8 +162,50 @@ getSomeExpansion (GlobalExpansion e) = Just e
 getSomeExpansion (SomeExpansion t v)
   | Just HRefl <- t `eqTypeRep` typeRep @a = Just v
   | otherwise = Nothing
+getSomeExpansion Namespace {} = Nothing
 
-type Expansions tag m = HashMap Text (SomeExpansion tag m)
+newtype Expansions tag m = Expansions {getExpansions :: HashMap Text (SomeExpansion tag m)}
+
+instance Semigroup (Expansions tag m) where
+  (Expansions x) <> (Expansions y) = Expansions $ Map.unionWith f x y
+    where
+      f (Namespace n) (Namespace m) = Namespace $ n <> m
+      f z _ = z
+
+instance Monoid (Expansions tag m) where
+  mempty = Expansions mempty
+
+splitExpansionKey :: Text -> [Text]
+splitExpansionKey = T.split (\c -> c == '.' || c == ':')
+
+lookupExpansion :: Text -> Expansions tag m -> Maybe (SomeExpansion tag m)
+lookupExpansion (splitExpansionKey -> keys) (Expansions e) = go keys e
+  where
+    go [] _ = Nothing
+    go [k] m = Map.lookup k m
+    go (k : ks) m = case Map.lookup k m of
+      Just (Namespace (Expansions n)) -> go ks n
+      _ -> Nothing
+
+insertExpansion :: Text -> SomeExpansion tag m -> Expansions tag m -> Expansions tag m
+insertExpansion (splitExpansionKey -> keys) e (Expansions es) = Expansions $ go keys es
+  where
+    go [] = id
+    go [k] = Map.insert k e
+    go (k : ks) =
+      flip Map.alter k $
+        Just . Namespace . Expansions . \case
+          Just (Namespace (Expansions n)) -> go ks n
+          _ -> go ks mempty
+
+deleteExpansion :: Text -> Expansions tag m -> Expansions tag m
+deleteExpansion (splitExpansionKey -> keys) (Expansions es) = Expansions $ go keys es
+  where
+    go [] = id
+    go [k] = Map.delete k
+    go (k : ks) = flip Map.alter k \case
+      Just (Namespace (Expansions n)) -> Just $ Namespace $ Expansions $ go ks n
+      _ -> Nothing
 
 -- | Ondim's expansion state
 data OndimState tag (m :: Type -> Type) = OndimState
@@ -208,7 +261,7 @@ throwCustom name =
 
 getTextData :: Monad m => Text -> Ondim tag m (Maybe Text)
 getTextData name = do
-  mbValue <- Ondim $ gets (Map.lookup name . expansions)
+  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
   return do
     TextData text <- mbValue
     return text
@@ -219,7 +272,7 @@ getExpansion ::
   Text ->
   Ondim tag m (Maybe (Expansion tag m t))
 getExpansion name = do
-  mbValue <- Ondim $ gets (Map.lookup name . expansions)
+  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
   return do
     expansion <- getSomeExpansion =<< mbValue
     Just (expCtx name . expansion)
@@ -234,16 +287,16 @@ liftNode ::
   t ->
   Ondim tag m [t]
 liftNode node = do
-  apFilters <- Ondim $ gets $ foldr (.) id . mapMaybe (getSomeFilter @t) . Map.elems . filters
+  apFilters <- Ondim $ gets $ foldr (\f g -> f node . g) id . mapMaybe (getSomeFilter @t) . Map.elems . filters
   apFilters $
     case identify @tag node of
       Just name -> expand name
-      _ -> pure <$> liftSubstructures node
+      _ -> one <$> liftSubstructures node
   where
     expand name =
       getExpansion name >>= \case
         Just expansion -> expansion node
-        Nothing -> pure <$> liftSubstructures node
+        Nothing -> withDebugCtx id (name :) $ one <$> liftSubstructures node
 {-# INLINEABLE liftNode #-}
 
 -- | Lift a list of nodes, applying filters.
