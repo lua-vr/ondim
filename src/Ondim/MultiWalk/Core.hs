@@ -8,7 +8,6 @@
 
 module Ondim.MultiWalk.Core
   ( Ondim (..),
-    OndimTag (..),
     OndimNode (..),
     liftNode,
     liftNodes,
@@ -55,9 +54,6 @@ import Type.Reflection (TypeRep, eqTypeRep, typeRep, type (:~~:) (HRefl))
 import Prelude hiding (All)
 
 -- * Classes
-
-class (All (OndimNode tag) (OndimTypes tag)) => OndimTag tag where
-  type OndimTypes tag :: [Type]
 
 class
   ( HasSub GSubTag (ExpTypes t) t,
@@ -114,7 +110,7 @@ instance MonadState s m => MonadState s (Ondim tag m) where
 
 -- * State data
 
-type GlobalConstraints tag m t = (OndimNode tag t, OndimTag tag, Monad m)
+type GlobalConstraints tag m t = (OndimNode tag t, Monad m)
 
 type Filter tag m t = t -> Ondim tag m [t] -> Ondim tag m [t]
 
@@ -283,7 +279,7 @@ getExpansion name = do
 -}
 liftNode ::
   forall tag m t.
-  (Monad m, OndimTag tag, OndimNode tag t) =>
+  (Monad m, OndimNode tag t) =>
   t ->
   Ondim tag m [t]
 liftNode node = do
@@ -302,7 +298,7 @@ liftNode node = do
 -- | Lift a list of nodes, applying filters.
 liftNodes ::
   forall tag m t.
-  (Monad m, OndimNode tag t, OndimTag tag) =>
+  (Monad m, OndimNode tag t) =>
   [t] ->
   Ondim tag m [t]
 liftNodes = foldMapM (liftNode @tag)
@@ -310,7 +306,6 @@ liftNodes = foldMapM (liftNode @tag)
 modSubLift ::
   forall tag ls m t.
   ( Monad m,
-    OndimTag tag,
     HasSub GSubTag ls t,
     All (CanLift tag) ls
   ) =>
@@ -370,13 +365,13 @@ modSubstructure ::
 modSubstructure f = runIdentity . modSubstructureM @a (Identity . f)
 
 -- | Lift only the substructures of a node.
-liftSubstructures :: forall tag m t. (Monad m, OndimTag tag, OndimNode tag t) => t -> Ondim tag m t
+liftSubstructures :: forall tag m t. (Monad m, OndimNode tag t) => t -> Ondim tag m t
 liftSubstructures = modSubLift @tag @(ExpTypes t)
 {-# INLINEABLE liftSubstructures #-}
 
 class CanLift (tag :: Type) (s :: SubSpec) where
   liftSub ::
-    (OndimTag tag, Monad m) =>
+    Monad m =>
     SpecCarrier s ->
     Ondim tag m (SpecCarrier s)
 

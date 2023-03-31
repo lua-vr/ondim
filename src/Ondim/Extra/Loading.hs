@@ -14,7 +14,7 @@ newtype TemplateLoadingError = TemplateLoadingException String
 
 loadTemplatesDynamic' ::
   forall m n tplTypes tag.
-  (OndimTag tag, Ord tplTypes) =>
+  (Ord tplTypes) =>
   (MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   -- | Patterns to look for.
   [(tplTypes, FilePattern)] ->

@@ -4,7 +4,7 @@ module Ondim.Targets.Pandoc.Instances where
 
 import Data.Text qualified as T
 import Ondim.MultiWalk.Combinators
-import Ondim.MultiWalk.Core (OndimNode (..), OndimTag (..), Attribute)
+import Ondim.MultiWalk.Core (OndimNode (..), Attribute)
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Definition
 
@@ -12,16 +12,6 @@ getId :: [Text] -> Maybe Text
 getId = asum . map (T.stripPrefix "e:")
 
 data PandocTag
-
-instance OndimTag PandocTag where
-  type
-    OndimTypes PandocTag =
-      '[ Pandoc,
-         Inline,
-         Block,
-         Attribute,
-         Text
-       ]
 
 instance OndimNode PandocTag Pandoc where
   type

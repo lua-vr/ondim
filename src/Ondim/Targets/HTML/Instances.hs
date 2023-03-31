@@ -10,7 +10,7 @@ import Ondim.MultiWalk.Combinators
     Converting,
     ToSpecList,
   )
-import Ondim (OndimNode (..), OndimTag (..), Attribute)
+import Ondim (OndimNode (..), Attribute)
 import Text.XmlHtml qualified as X
 
 -- | Ondim HTML tag. (Used for instances).
@@ -55,9 +55,6 @@ toNodeList = foldMap go
 nodeText :: HtmlNode -> Text
 nodeText (TextNode t) = t
 nodeText el@Element {} = foldMap nodeText (elementChildren el)
-
-instance OndimTag HtmlTag where
-  type OndimTypes HtmlTag = '[X.Document, HtmlNode, Attribute, Text]
 
 deriving instance (Generic X.Document)
 

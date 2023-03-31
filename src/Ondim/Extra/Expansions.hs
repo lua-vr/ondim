@@ -16,7 +16,7 @@ import Relude.Extra.Map (notMember)
 import Replace.Attoparsec.Text (streamEditT)
 
 lookupAttr' ::
-  (Monad m, OndimNode tag t, OndimTag tag) =>
+  (Monad m, OndimNode tag t) =>
   Text ->
   t ->
   Ondim tag m Text
@@ -26,7 +26,7 @@ lookupAttr' key node =
 
 -- * Expansions
 
-ignore :: forall t tag m. (OndimTag tag, Monad m) => Expansion tag m t
+ignore :: forall t tag m. Monad m => Expansion tag m t
 ignore = const $ pure []
 
 debug :: GlobalExpansion tag m
@@ -71,7 +71,6 @@ with node = do
 ifElse ::
   forall t tag m.
   ( OndimNode tag t,
-    OndimTag tag,
     Monad m
   ) =>
   Bool ->
@@ -200,10 +199,10 @@ interpParser = do
   _ <- char ')'
   pure s
 
-attrEdit :: (OndimTag tag, Monad m) => Text -> Ondim tag m Text
+attrEdit :: Monad m => Text -> Ondim tag m Text
 attrEdit = streamEditT interpParser callText
 
-attrSub :: (OndimTag tag, Monad m) => Filter tag m Text
+attrSub :: Monad m => Filter tag m Text
 attrSub t _ = one <$> attrEdit t
 
 notBoundFilter :: forall t tag m. (GlobalConstraints tag m t) => Set Text -> Filter tag m t
