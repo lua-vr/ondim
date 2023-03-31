@@ -2,7 +2,6 @@ module Ondim.Extra.Loading where
 
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
-import Data.HashMap.Strict qualified as Map
 import Ondim
 import Relude.Extra (minimumOn1, toPairs)
 import System.FilePath (dropExtensions, splitDirectories, (</>))
@@ -43,5 +42,5 @@ loadTemplatesDynamic' patts ins places =
                     Refresh _ ls ->
                       let dir = snd $ minimumOn1 fst (fst <$> ls)
                        in ins tplType name <$> readFileBS (dir </> file)
-                    Delete -> pure \s -> s {expansions = Map.delete name (expansions s)}
+                    Delete -> pure \s -> s {expansions = deleteExpansion name (expansions s)}
    in unionMount sources patterns exclude initial handler
