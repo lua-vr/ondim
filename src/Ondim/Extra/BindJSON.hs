@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
+{-
 module Ondim.Extra.BindJSON
   ( bindObject,
     openObject,
@@ -10,9 +11,8 @@ where
 
 import Data.Aeson
 import Data.Aeson.Key qualified as K
-import Data.Map.Syntax (MapSyntaxM, (##))
 import Data.Scientific
-import Ondim (Expansion, Ondim, binding, bindingText, liftChildren)
+import Ondim (Expansion, Ondim, binding, liftChildren)
 import Ondim.Extra.Expansions (HasAttrChild, lookupAttr, prefixed)
 import Relude.Extra (toPairs)
 
@@ -124,3 +124,4 @@ prettyNum :: Scientific -> Text
 prettyNum x = case floatingOrInteger x of
   Left (r :: Float) -> show r
   Right (i :: Int) -> show i
+-}

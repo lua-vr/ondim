@@ -9,7 +9,6 @@
 -}
 module Ondim
   ( -- * Classes
-    OndimTag (..),
     OndimNode (..),
 
     -- * HasSub
@@ -276,7 +275,6 @@ children = getSubstructure @t
 liftChildren ::
   forall t tag m.
   ( OndimNode tag t,
-    OndimTag tag,
     Monad m
   ) =>
   Expansion tag m t
@@ -286,13 +284,13 @@ liftChildren = liftNodes . children @tag
 
 attributes ::
   forall t tag m.
-  (OndimNode tag t, Monad m, OndimTag tag) =>
+  (OndimNode tag t, Monad m) =>
   t ->
   Ondim tag m [Attribute]
 attributes = liftNodes . getAttrs @tag
 
 lookupAttr ::
-  (Monad m, OndimNode tag t, OndimTag tag) =>
+  (Monad m, OndimNode tag t) =>
   Text ->
   t ->
   Ondim tag m (Maybe Text)
@@ -301,8 +299,7 @@ lookupAttr key = fmap (L.lookup key) . attributes
 fromTemplate ::
   forall tag m t.
   ( OndimNode tag t,
-    Monad m,
-    OndimTag tag
+    Monad m
   ) =>
   [t] ->
   Expansion tag m t
