@@ -13,9 +13,6 @@ import Ondim.MultiWalk.Combinators
 import Ondim (OndimNode (..), Attribute)
 import Text.XmlHtml qualified as X
 
--- | Ondim HTML tag. (Used for instances).
-data HtmlTag
-
 -- | We use a new XML datatype so that we can group the node with the newline space
 --   before it. This makes the output formatting much better.
 data HtmlNode
@@ -58,14 +55,14 @@ nodeText el@Element {} = foldMap nodeText (elementChildren el)
 
 deriving instance (Generic X.Document)
 
-instance OndimNode HtmlTag X.Document where
+instance OndimNode X.Document where
   type ExpTypes X.Document = ToSpecList '[Converting [X.Node] HtmlNode]
 
-instance Conversible HtmlTag [X.Node] [HtmlNode] where
+instance Conversible [X.Node] [HtmlNode] where
   convertTo = fromNodeList
   convertFrom = toNodeList
 
-instance OndimNode HtmlTag HtmlNode where
+instance OndimNode HtmlNode where
   type ExpTypes HtmlNode = ToSpecList '[Attribute, HtmlNode]
   identify (Element _ name _ _) = Just name
   identify _ = Nothing

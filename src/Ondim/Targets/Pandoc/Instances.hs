@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ondim.Targets.Pandoc.Instances where
 
@@ -11,16 +12,14 @@ import Text.Pandoc.Definition
 getId :: [Text] -> Maybe Text
 getId = asum . map (T.stripPrefix "e:")
 
-data PandocTag
-
-instance OndimNode PandocTag Pandoc where
+instance OndimNode Pandoc where
   type
     ExpTypes Pandoc =
       ToSpecList
         '[ Block
          ]
 
-instance OndimNode PandocTag Block where
+instance OndimNode Block where
   type
     ExpTypes Block =
       ToSpecList
@@ -37,7 +36,7 @@ instance OndimNode PandocTag Block where
   identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
 
-instance OndimNode PandocTag Inline where
+instance OndimNode Inline where
   type
     ExpTypes Inline =
       ToSpecList
@@ -51,7 +50,7 @@ instance OndimNode PandocTag Inline where
   identify _ = Nothing
   fromText = Just (toList . B.text)
 
-instance Conversible PandocTag Attr [Attribute] where
+instance Conversible Attr [Attribute] where
   convertTo (x, y, z) =
     ("id", x)
       : ("class", T.intercalate " " (filter (not . T.isPrefixOf "e:") y))

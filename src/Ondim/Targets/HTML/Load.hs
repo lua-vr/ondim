@@ -12,7 +12,7 @@ loadTemplatesDynamic ::
   forall m n.
   (Monad n, MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   [FilePath] ->
-  m (OndimState HtmlTag n, (OndimState HtmlTag n -> m ()) -> m ())
+  m (OndimState n, (OndimState n -> m ()) -> m ())
 loadTemplatesDynamic =
   loadTemplatesDynamic' patts ins
   where
@@ -25,10 +25,10 @@ loadTemplatesDynamic =
               (X.parseHTML (toString name) text)
        in s {expansions = insertExpansion name (toSomeExpansion template) (expansions s)}
 
-loadTemplates :: Monad n => [FilePath] -> IO (OndimState HtmlTag n)
+loadTemplates :: Monad n => [FilePath] -> IO (OndimState n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
 
 -- * Template loading helpers
 
-fromDocument :: Monad m => X.Document -> Expansion HtmlTag m HtmlNode
+fromDocument :: Monad m => X.Document -> Expansion m HtmlNode
 fromDocument = fromTemplate . fromNodeList . X.docContent
