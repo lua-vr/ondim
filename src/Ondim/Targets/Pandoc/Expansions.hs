@@ -10,11 +10,11 @@ import Ondim.Extra.Expansions
     scope,
     switchBound,
   )
-import Ondim.Targets.Pandoc.Instances
+import Ondim.Targets.Pandoc.Instances ()
 import Text.Pandoc.Definition
 import Text.Pandoc.Walk
 
-cons :: forall m. Monad m => Expansion PandocTag m Block
+cons :: forall m. Monad m => Expansion m Block
 cons x = do
   nodes <- liftChildren x
   pure $
@@ -28,8 +28,8 @@ cons x = do
 bindDefaults ::
   forall m t.
   Monad m =>
-  Ondim PandocTag m t ->
-  Ondim PandocTag m t
+  Ondim m t ->
+  Ondim m t
 bindDefaults st =
   st
     `binding` do

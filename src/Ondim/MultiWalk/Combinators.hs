@@ -28,13 +28,13 @@ type family CombinatorCarrier (b :: Type) :: Type where
 data MatchWith (s :: Type) (a :: Type)
 
 instance
-  ( CanLift tag (BuildSpec a),
+  ( CanLift (BuildSpec a),
     Coercible (CombinatorCarrier a) c,
     c ~ CombinatorCarrier (MatchWith b a)
   ) =>
-  CanLift tag ('SubSpec c (MatchWith b a))
+  CanLift ('SubSpec c (MatchWith b a))
   where
-  liftSub = fmap coerce . liftSub @tag @(BuildSpec a) . coerce
+  liftSub = fmap coerce . liftSub @(BuildSpec a) . coerce
 
 instance
   ( Substructure s (BuildSpec a),
@@ -51,12 +51,12 @@ instance
 data Under (b :: Type) (a :: Type)
 
 instance
-  ( CanLift tag (BuildSpec a),
+  ( CanLift (BuildSpec a),
     HasSub GSubTag '[BuildSpec a] b
   ) =>
-  CanLift tag ('SubSpec b (Under b a))
+  CanLift ('SubSpec b (Under b a))
   where
-  liftSub = modSubLift @tag @'[BuildSpec a]
+  liftSub = modSubLift @'[BuildSpec a]
 
 instance
   ( Substructure s (BuildSpec a),
@@ -73,35 +73,35 @@ data PairSub k v
 instance
   ( c ~ CombinatorCarrier (PairSub k v),
     Hashable k,
-    CanLift tag (BuildSpec (k, v))
+    CanLift (BuildSpec (k, v))
   ) =>
-  CanLift tag ('SubSpec c (PairSub k v))
+  CanLift ('SubSpec c (PairSub k v))
   where
   liftSub (x :: HashMap k v) =
-    Map.fromList <$> liftSub @tag @(BuildSpec (k, v)) (Map.toList x)
+    Map.fromList <$> liftSub @(BuildSpec (k, v)) (Map.toList x)
 
 data OneSub a
 
 instance
   ( c ~ CombinatorCarrier (OneSub a),
-    CanLift tag ('SubSpec [a] a),
+    CanLift ('SubSpec [a] a),
     Monoid a
   ) =>
-  CanLift tag ('SubSpec c (OneSub a))
+  CanLift ('SubSpec c (OneSub a))
   where
-  liftSub (x :: a) = mconcat <$> liftSub @tag @('SubSpec [a] a) [x]
+  liftSub (x :: a) = mconcat <$> liftSub @('SubSpec [a] a) [x]
 
-class Conversible tag a b where
+class Conversible a b where
   convertTo :: a -> b
   convertFrom :: b -> a
 
 instance
-  ( CanLift tag (BuildSpec a),
-    Conversible tag s (CombinatorCarrier a),
+  ( CanLift (BuildSpec a),
+    Conversible s (CombinatorCarrier a),
     c ~ CombinatorCarrier (Converting s a)
   ) =>
-  CanLift tag ('SubSpec c (Converting s a))
+  CanLift ('SubSpec c (Converting s a))
   where
-  liftSub = fmap (convertFrom @tag) . liftSub @tag @(BuildSpec a) . convertTo @tag
+  liftSub = fmap convertFrom . liftSub @(BuildSpec a) . convertTo
 
 data Converting a b

@@ -16,20 +16,20 @@ import Relude.Extra.Map (notMember)
 import Replace.Attoparsec.Text (streamEditT)
 
 lookupAttr' ::
-  (Monad m, OndimNode tag t) =>
+  (Monad m, OndimNode t) =>
   Text ->
   t ->
-  Ondim tag m Text
+  Ondim m Text
 lookupAttr' key node =
   maybe (throwCustom $ "Missing '" <> key <> "' argument.") pure . L.lookup key
     =<< attributes node
 
 -- * Expansions
 
-ignore :: forall t tag m. Monad m => Expansion tag m t
+ignore :: forall t m. Monad m => Expansion m t
 ignore = const $ pure []
 
-debug :: GlobalExpansion tag m
+debug :: GlobalExpansion m
 debug node = do
   exps <- expansions <$> getOndimS
   let go (Expansions e) = (`foldMap` Map.toList e) \(k, v) ->
@@ -44,7 +44,7 @@ debug node = do
       "key" #@ key
       "kind" #@ kind
 
-open :: GlobalExpansion tag m
+open :: GlobalExpansion m
 open node = do
   name' <- viaNonEmpty (fst . head) <$> attributes node
   name <- maybe (throwCustom "Expansion name not provided.") pure name'
@@ -54,7 +54,7 @@ open node = do
       Just (Namespace v) -> withExpansions v $ liftChildren node
       _ -> throwNotBound name
 
-with :: GlobalExpansion tag m
+with :: GlobalExpansion m
 with node = do
   name' <- viaNonEmpty (fst . head) <$> attributes node
   name <- maybe (throwCustom "Expansion name not provided.") pure name'
@@ -69,18 +69,18 @@ with node = do
       else withExpansion as expansion $ liftChildren node
 
 ifElse ::
-  forall t tag m.
-  ( OndimNode tag t,
+  forall t m.
+  ( OndimNode t,
     Monad m
   ) =>
   Bool ->
-  Expansion tag m t
+  Expansion m t
 ifElse cond node = do
-  let els = children @tag node
-      yes = filter ((Just "o:else" /=) . identify @tag) els
+  let els = children node
+      yes = filter ((Just "o:else" /=) . identify) els
       no =
-        maybe [] (children @tag) $
-          find ((Just "o:else" ==) . identify @tag) els
+        maybe [] children $
+          find ((Just "o:else" ==) . identify) els
   if cond
     then liftNodes yes
     else liftNodes no
@@ -89,7 +89,7 @@ ifElse cond node = do
 getTag :: [Attribute] -> Maybe Text
 getTag attrs = L.lookup "tag" attrs <|> (case attrs of [(s, "")] -> Just s; _ -> Nothing)
 
-switchCases :: forall tag m. Text -> ExpansionMap tag m
+switchCases :: forall m. Text -> ExpansionMap m
 switchCases tag =
   "o:case" #* \(caseNode :: t) -> do
     attrs <- attributes @t caseNode
@@ -100,33 +100,33 @@ switchCases tag =
 {-# INLINEABLE switchCases #-}
 
 switch ::
-  forall tag m t.
-  GlobalConstraints tag m t =>
+  forall m t.
+  GlobalConstraints m t =>
   Text ->
-  Expansion tag m t
+  Expansion m t
 switch tag node =
   liftChildren node
     `binding` switchCases tag
 {-# INLINEABLE switch #-}
 
 switchWithDefault ::
-  forall tag m t.
-  GlobalConstraints tag m t =>
+  forall m t.
+  GlobalConstraints m t =>
   Text ->
-  Expansion tag m t
+  Expansion m t
 switchWithDefault tag node = do
-  let els = children @tag node
+  let els = children node
   fromMaybe (pure []) do
     child <-
       find (\x -> nameIs "o:case" x && hasTag x) els
         <|> find (nameIs "o:default") els
     pure $ liftChildren child
   where
-    nameIs n x = identify @tag x == Just n
-    hasTag (getAttrs @tag -> attrs) =
+    nameIs n x = identify x == Just n
+    hasTag (getAttrs -> attrs) =
       Just tag == getTag attrs
 
-ifBound :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
+ifBound :: forall t m. GlobalConstraints m t => Expansion m t
 ifBound node = do
   attrs <- attributes node
   bound <- case getTag attrs of
@@ -134,7 +134,7 @@ ifBound node = do
     Nothing -> pure False
   ifElse bound node
 
-switchBound :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
+switchBound :: forall t m. GlobalConstraints m t => Expansion m t
 switchBound node = do
   tag <- getTag <$> attributes node
   flip (maybe $ pure []) tag \tag' -> do
@@ -144,7 +144,7 @@ switchBound node = do
 -- Binding
 
 -- | This expansion works like Heist's `bind` splice
-bind :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
+bind :: forall t m. GlobalConstraints m t => Expansion m t
 bind node = do
   attrs <- attributes node
   whenJust (getTag attrs) $ \name -> do
@@ -161,9 +161,9 @@ bind node = do
   text (via the toTxt parameter).
 -}
 bindText ::
-  GlobalConstraints tag m t =>
+  GlobalConstraints m t =>
   (t -> Text) ->
-  Expansion tag m t
+  Expansion m t
 bindText toTxt self = do
   attrs <- attributes self
   child <- liftChildren self
@@ -184,7 +184,7 @@ bindText toTxt self = do
    >   <animal-entry />
    > <scope/>
 -}
-scope :: forall t tag m. GlobalConstraints tag m t => Expansion tag m t
+scope :: forall t m. GlobalConstraints m t => Expansion m t
 scope node = do
   s <- getOndimS
   liftChildren node <* putOndimS s
@@ -199,15 +199,15 @@ interpParser = do
   _ <- char ')'
   pure s
 
-attrEdit :: Monad m => Text -> Ondim tag m Text
+attrEdit :: Monad m => Text -> Ondim m Text
 attrEdit = streamEditT interpParser callText
 
-attrSub :: Monad m => Filter tag m Text
+attrSub :: Monad m => Filter m Text
 attrSub t _ = one <$> attrEdit t
 
-notBoundFilter :: forall t tag m. (GlobalConstraints tag m t) => Set Text -> Filter tag m t
+notBoundFilter :: forall t m. (GlobalConstraints m t) => Set Text -> Filter m t
 notBoundFilter validIds original nodes
-  | any (("@try" ==) . fst) (getAttrs @tag original) =
+  | any (("@try" ==) . fst) (getAttrs original) =
       result `catchError` \case
         ExpansionNotBound {} -> return []
         e -> throwError e
@@ -215,11 +215,11 @@ notBoundFilter validIds original nodes
   where
     result =
       nodes >>= mapM \node ->
-        case identify @tag node of
+        case identify node of
           Just name | name `notMember` validIds -> throwNotBound name
           _ -> return node
 
-mbAttrFilter :: Monad m => Filter tag m Attribute
+mbAttrFilter :: Monad m => Filter m Attribute
 mbAttrFilter (k, _) x
   | Just k' <- "?" `T.stripSuffix` k =
       first (const k') <<$>> x `catchError` \case

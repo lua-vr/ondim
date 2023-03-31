@@ -57,11 +57,11 @@ import Prelude hiding (All)
 
 class
   ( HasSub GSubTag (ExpTypes t) t,
-    All (CanLift tag) (ExpTypes t),
+    All CanLift (ExpTypes t),
     All (Substructure t) (ExpTypes t),
     Typeable t
   ) =>
-  OndimNode tag t
+  OndimNode t
   where
   type ExpTypes t :: [SubSpec]
   identify :: t -> Maybe Text
@@ -70,7 +70,7 @@ class
   fromText = Nothing
   getAttrs :: t -> [Attribute]
   default getAttrs ::
-    ( OndimNode tag t,
+    ( OndimNode t,
       All (Substructure Attribute) (ExpTypes t)
     ) =>
     t ->
@@ -82,48 +82,48 @@ class
 -- | Alias for attributes
 type Attribute = (Text, Text)
 
-instance OndimNode tag Text where
+instance OndimNode Text where
   type ExpTypes Text = '[]
 
-instance OndimNode tag Attribute where
+instance OndimNode Attribute where
   -- Manually defined instance for convenience
   type ExpTypes Attribute = '[ 'SubSpec Text Text]
   identify = Just . fst
 
-instance CanLift tag ('SubSpec Text Text) where
-  liftSub (x :: a) = mconcat <$> liftSub @tag @('SubSpec [a] a) [x]
+instance CanLift ('SubSpec Text Text) where
+  liftSub (x :: a) = mconcat <$> liftSub @('SubSpec [a] a) [x]
 
 -- * Monad
 
-newtype Ondim tag m a = Ondim
+newtype Ondim m a = Ondim
   { unOndimT ::
-      ReaderT OndimGS (StateT (OndimState tag m) (ExceptT OndimException m)) a
+      ReaderT OndimGS (StateT (OndimState m) (ExceptT OndimException m)) a
   }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadError OndimException)
 
-instance MonadTrans (Ondim tag) where
+instance MonadTrans Ondim where
   lift = Ondim . lift . lift . lift
 
-instance MonadState s m => MonadState s (Ondim tag m) where
+instance MonadState s m => MonadState s (Ondim m) where
   get = lift get
   put x = lift (put x)
 
 -- * State data
 
-type GlobalConstraints tag m t = (OndimNode tag t, Monad m)
+type GlobalConstraints m t = (OndimNode t, Monad m)
 
-type Filter tag m t = t -> Ondim tag m [t] -> Ondim tag m [t]
+type Filter m t = t -> Ondim m [t] -> Ondim m [t]
 
-type GlobalFilter tag m = forall a. GlobalConstraints tag m a => Filter tag m a
+type GlobalFilter m = forall a. GlobalConstraints m a => Filter m a
 
-data SomeFilter tag m where
-  SomeFilter :: TypeRep a -> Filter tag m a -> SomeFilter tag m
-  GlobalFilter :: GlobalFilter tag m -> SomeFilter tag m
+data SomeFilter m where
+  SomeFilter :: TypeRep a -> Filter m a -> SomeFilter m
+  GlobalFilter :: GlobalFilter m -> SomeFilter m
 
-toSomeFilter :: Typeable a => Filter tag m a -> SomeFilter tag m
+toSomeFilter :: Typeable a => Filter m a -> SomeFilter m
 toSomeFilter = SomeFilter typeRep
 
-getSomeFilter :: forall a tag m. GlobalConstraints tag m a => SomeFilter tag m -> Maybe (Filter tag m a)
+getSomeFilter :: forall a m. GlobalConstraints m a => SomeFilter m -> Maybe (Filter m a)
 getSomeFilter (GlobalFilter v) = Just v
 getSomeFilter (SomeFilter t v)
   | Just HRefl <- t `eqTypeRep` rep = Just v
@@ -131,28 +131,28 @@ getSomeFilter (SomeFilter t v)
   where
     rep = typeRep :: TypeRep a
 
-type Filters tag m = HashMap Text (SomeFilter tag m)
+type Filters m = HashMap Text (SomeFilter m)
 
-type Expansion tag m t = t -> Ondim tag m [t]
+type Expansion m t = t -> Ondim m [t]
 
-type GlobalExpansion tag m = forall a. GlobalConstraints tag m a => Expansion tag m a
+type GlobalExpansion m = forall a. GlobalConstraints m a => Expansion m a
 
-data SomeExpansion tag m where
-  SomeExpansion :: TypeRep a -> Expansion tag m a -> SomeExpansion tag m
-  GlobalExpansion :: GlobalExpansion tag m -> SomeExpansion tag m
-  TextData :: Text -> SomeExpansion tag m
-  Namespace :: Expansions tag m -> SomeExpansion tag m
+data SomeExpansion m where
+  SomeExpansion :: TypeRep a -> Expansion m a -> SomeExpansion m
+  GlobalExpansion :: GlobalExpansion m -> SomeExpansion m
+  TextData :: Text -> SomeExpansion m
+  Namespace :: Expansions m -> SomeExpansion m
 
-toSomeExpansion :: Typeable a => Expansion tag m a -> SomeExpansion tag m
+toSomeExpansion :: Typeable a => Expansion m a -> SomeExpansion m
 toSomeExpansion = SomeExpansion typeRep
 
 getSomeExpansion ::
-  forall a tag m.
-  GlobalConstraints tag m a =>
-  SomeExpansion tag m ->
-  Maybe (Expansion tag m a)
+  forall a m.
+  GlobalConstraints m a =>
+  SomeExpansion m ->
+  Maybe (Expansion m a)
 getSomeExpansion (TextData t)
-  | Just f <- fromText @tag = Just (const $ pure $ f t)
+  | Just f <- fromText = Just (const $ pure $ f t)
   | otherwise = Nothing
 getSomeExpansion (GlobalExpansion e) = Just e
 getSomeExpansion (SomeExpansion t v)
@@ -160,21 +160,21 @@ getSomeExpansion (SomeExpansion t v)
   | otherwise = Nothing
 getSomeExpansion Namespace {} = Nothing
 
-newtype Expansions tag m = Expansions {getExpansions :: HashMap Text (SomeExpansion tag m)}
+newtype Expansions m = Expansions {getExpansions :: HashMap Text (SomeExpansion m)}
 
-instance Semigroup (Expansions tag m) where
+instance Semigroup (Expansions m) where
   (Expansions x) <> (Expansions y) = Expansions $ Map.unionWith f x y
     where
       f (Namespace n) (Namespace m) = Namespace $ n <> m
       f z _ = z
 
-instance Monoid (Expansions tag m) where
+instance Monoid (Expansions m) where
   mempty = Expansions mempty
 
 splitExpansionKey :: Text -> [Text]
 splitExpansionKey = T.split (\c -> c == '.' || c == ':')
 
-lookupExpansion :: Text -> Expansions tag m -> Maybe (SomeExpansion tag m)
+lookupExpansion :: Text -> Expansions m -> Maybe (SomeExpansion m)
 lookupExpansion (splitExpansionKey -> keys) (Expansions e) = go keys e
   where
     go [] _ = Nothing
@@ -183,7 +183,7 @@ lookupExpansion (splitExpansionKey -> keys) (Expansions e) = go keys e
       Just (Namespace (Expansions n)) -> go ks n
       _ -> Nothing
 
-insertExpansion :: Text -> SomeExpansion tag m -> Expansions tag m -> Expansions tag m
+insertExpansion :: Text -> SomeExpansion m -> Expansions m -> Expansions m
 insertExpansion (splitExpansionKey -> keys) e (Expansions es) = Expansions $ go keys es
   where
     go [] = id
@@ -194,7 +194,7 @@ insertExpansion (splitExpansionKey -> keys) e (Expansions es) = Expansions $ go 
           Just (Namespace (Expansions n)) -> go ks n
           _ -> go ks mempty
 
-deleteExpansion :: Text -> Expansions tag m -> Expansions tag m
+deleteExpansion :: Text -> Expansions m -> Expansions m
 deleteExpansion (splitExpansionKey -> keys) (Expansions es) = Expansions $ go keys es
   where
     go [] = id
@@ -204,19 +204,19 @@ deleteExpansion (splitExpansionKey -> keys) (Expansions es) = Expansions $ go ke
       _ -> Nothing
 
 -- | Ondim's expansion state
-data OndimState tag (m :: Type -> Type) = OndimState
+data OndimState (m :: Type -> Type) = OndimState
   { -- | Named expansions
-    expansions :: Expansions tag m,
+    expansions :: Expansions m,
     -- | Similar to expansions, but are always applied after the expansion (the
     -- purpose of the name is just to facilitate binding/unbinding).
-    filters :: Filters tag m
+    filters :: Filters m
   }
   deriving (Generic)
 
-instance Semigroup (OndimState tag m) where
+instance Semigroup (OndimState m) where
   OndimState x1 y1 <> OndimState x2 y2 = OndimState (x1 <> x2) (y1 <> y2)
 
-instance Monoid (OndimState tag m) where
+instance Monoid (OndimState m) where
   mempty = OndimState mempty mempty
 
 -- | Ondim's global state
@@ -240,7 +240,7 @@ data OndimException
 throwNotBound ::
   Monad m =>
   Text ->
-  Ondim tag m s
+  Ondim m s
 throwNotBound name =
   throwError . ExpansionNotBound name
     =<< Ondim (asks expansionTrace)
@@ -248,14 +248,14 @@ throwNotBound name =
 throwCustom ::
   Monad m =>
   Text ->
-  Ondim tag m s
+  Ondim m s
 throwCustom name =
   throwError . CustomException name
     =<< Ondim (asks expansionTrace)
 
 -- * Lifiting
 
-getTextData :: Monad m => Text -> Ondim tag m (Maybe Text)
+getTextData :: Monad m => Text -> Ondim m (Maybe Text)
 getTextData name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
   return do
@@ -263,10 +263,10 @@ getTextData name = do
     return text
 
 getExpansion ::
-  forall t tag m.
-  GlobalConstraints tag m t =>
+  forall t m.
+  GlobalConstraints m t =>
   Text ->
-  Ondim tag m (Maybe (Expansion tag m t))
+  Ondim m (Maybe (Expansion m t))
 getExpansion name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
   return do
@@ -278,14 +278,14 @@ getExpansion name = do
    be evaluated with the defined expansions.
 -}
 liftNode ::
-  forall tag m t.
-  (Monad m, OndimNode tag t) =>
+  forall m t.
+  (Monad m, OndimNode t) =>
   t ->
-  Ondim tag m [t]
+  Ondim m [t]
 liftNode node = do
   apFilters <- Ondim $ gets $ foldr (\f g -> f node . g) id . mapMaybe (getSomeFilter @t) . Map.elems . filters
   apFilters $
-    case identify @tag node of
+    case identify node of
       Just name -> expand name
       _ -> one <$> liftSubstructures node
   where
@@ -297,21 +297,21 @@ liftNode node = do
 
 -- | Lift a list of nodes, applying filters.
 liftNodes ::
-  forall tag m t.
-  (Monad m, OndimNode tag t) =>
+  forall m t.
+  (Monad m, OndimNode t) =>
   [t] ->
-  Ondim tag m [t]
-liftNodes = foldMapM (liftNode @tag)
+  Ondim m [t]
+liftNodes = foldMapM liftNode
 
 modSubLift ::
-  forall tag ls m t.
+  forall ls m t.
   ( Monad m,
     HasSub GSubTag ls t,
-    All (CanLift tag) ls
+    All CanLift ls
   ) =>
   t ->
-  Ondim tag m t
-modSubLift = modSub @GSubTag @ls @t (Proxy @(CanLift tag)) (\(_ :: Proxy s) -> liftSub @tag @s)
+  Ondim m t
+modSubLift = modSub @GSubTag @ls @t (Proxy @CanLift) (\(_ :: Proxy s) -> liftSub @s)
 {-# INLINEABLE modSubLift #-}
 
 getSubstructure' ::
@@ -365,21 +365,21 @@ modSubstructure ::
 modSubstructure f = runIdentity . modSubstructureM @a (Identity . f)
 
 -- | Lift only the substructures of a node.
-liftSubstructures :: forall tag m t. (Monad m, OndimNode tag t) => t -> Ondim tag m t
-liftSubstructures = modSubLift @tag @(ExpTypes t)
+liftSubstructures :: forall m t. (Monad m, OndimNode t) => t -> Ondim m t
+liftSubstructures = modSubLift @(ExpTypes t)
 {-# INLINEABLE liftSubstructures #-}
 
-class CanLift (tag :: Type) (s :: SubSpec) where
+class CanLift (s :: SubSpec) where
   liftSub ::
     Monad m =>
     SpecCarrier s ->
-    Ondim tag m (SpecCarrier s)
+    Ondim m (SpecCarrier s)
 
 class Substructure (a :: Type) (s :: SubSpec) where
   getSubs :: SpecCarrier s -> [a]
   modSubs :: Applicative m => ([a] -> m [a]) -> SpecCarrier s -> m (SpecCarrier s)
 
-instance OndimNode tag a => CanLift tag ('SubSpec [a] a) where
+instance OndimNode a => CanLift ('SubSpec [a] a) where
   liftSub = liftNodes
 
 instance {-# OVERLAPPABLE #-} Substructure a s where
@@ -393,12 +393,12 @@ instance Substructure a ('SubSpec [a] a) where
 -- * Expansion context
 
 withDebugCtx ::
-  forall tag m a.
+  forall m a.
   Monad m =>
   (Int -> Int) ->
   ([Text] -> [Text]) ->
-  Ondim tag m a ->
-  Ondim tag m a
+  Ondim m a ->
+  Ondim m a
 withDebugCtx f g =
   Ondim
     . local
@@ -410,7 +410,7 @@ withDebugCtx f g =
       )
     . unOndimT
 
-expCtx :: forall tag m a. Monad m => Text -> Ondim tag m a -> Ondim tag m a
+expCtx :: forall m a. Monad m => Text -> Ondim m a -> Ondim m a
 expCtx name ctx = do
   gst <- Ondim ask
   if expansionDepth gst >= 200

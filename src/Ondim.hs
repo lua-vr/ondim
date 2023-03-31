@@ -116,8 +116,8 @@ import Prelude hiding (All)
 -- | Runs the Ondim action with a given initial state.
 evalOndimTWith ::
   Monad m =>
-  OndimState tag m ->
-  Ondim tag m a ->
+  OndimState m ->
+  Ondim m a ->
   m (Either OndimException a)
 evalOndimTWith s o =
   runExceptT $
@@ -127,9 +127,9 @@ evalOndimTWith s o =
 
 runOndimTWith ::
   Monad m =>
-  OndimState tag m ->
-  Ondim tag m a ->
-  m (Either OndimException (a, OndimState tag m))
+  OndimState m ->
+  Ondim m a ->
+  m (Either OndimException (a, OndimState m))
 runOndimTWith s o =
   runExceptT $
     unOndimT o
@@ -137,26 +137,26 @@ runOndimTWith s o =
       `runStateT` s
 
 -- | Runs the Ondim action with empty initial state.
-evalOndimT :: Monad m => Ondim tag m a -> m (Either OndimException a)
+evalOndimT :: Monad m => Ondim m a -> m (Either OndimException a)
 evalOndimT = evalOndimTWith mempty
 
 -- State manipulation
 
-getOndimS :: Monad m => Ondim tag m (OndimState tag m)
+getOndimS :: Monad m => Ondim m (OndimState m)
 getOndimS = Ondim get
 
-modifyOndimS :: Monad m => (OndimState tag m -> OndimState tag m) -> Ondim tag m ()
+modifyOndimS :: Monad m => (OndimState m -> OndimState m) -> Ondim m ()
 modifyOndimS = Ondim . modify'
 
-putOndimS :: Monad m => OndimState tag m -> Ondim tag m ()
+putOndimS :: Monad m => OndimState m -> Ondim m ()
 putOndimS = Ondim . put
 
 withExpansion ::
   Monad m =>
   Text ->
-  Maybe (SomeExpansion tag m) ->
-  Ondim tag m a ->
-  Ondim tag m a
+  Maybe (SomeExpansion m) ->
+  Ondim m a ->
+  Ondim m a
 withExpansion name ex st = do
   pEx <- Ondim $ gets (lookupExpansion name . expansions)
   Ondim $ modify' \s -> s {expansions = insOrDel ex (expansions s)}
@@ -167,9 +167,9 @@ withExpansion name ex st = do
 withFilter ::
   Monad m =>
   Text ->
-  Maybe (SomeFilter tag m) ->
-  Ondim tag m a ->
-  Ondim tag m a
+  Maybe (SomeFilter m) ->
+  Ondim m a ->
+  Ondim m a
 withFilter name ex st = do
   pEx <- Ondim $ gets (Map.lookup name . filters)
   Ondim $ modify' \s -> s {filters = insOrDel ex (filters s)}
@@ -178,27 +178,27 @@ withFilter name ex st = do
     insOrDel = maybe (Map.delete name) (Map.insert name)
 
 -- | "Bind" new expansions locally.
-withExpansions :: Monad m => Expansions tag m -> Ondim tag m a -> Ondim tag m a
+withExpansions :: Monad m => Expansions m -> Ondim m a -> Ondim m a
 withExpansions (Expansions exps) o = foldr (\(k, v) -> withExpansion k (Just v)) o (Map.toList exps)
 
 -- | "Bind" filters locally.
-withFilters :: Monad m => Filters tag m -> Ondim tag m a -> Ondim tag m a
+withFilters :: Monad m => Filters m -> Ondim m a -> Ondim m a
 withFilters filt o = foldr (\(k, v) -> withFilter k (Just v)) o (Map.toList filt)
 
 -- | "Unbind" many expansions locally.
-withoutExpansions :: Monad m => [Text] -> Ondim tag m a -> Ondim tag m a
+withoutExpansions :: Monad m => [Text] -> Ondim m a -> Ondim m a
 withoutExpansions names o = foldr (`withExpansion` Nothing) o names
 
 -- | "Unbind" many expansions locally.
-withoutFilters :: Monad m => [Text] -> Ondim tag m a -> Ondim tag m a
+withoutFilters :: Monad m => [Text] -> Ondim m a -> Ondim m a
 withoutFilters names o = foldr (`withFilter` Nothing) o names
 
 -- | Put a new expansion into the local state, modifying the scope.
-putExpansion :: Monad m => Text -> SomeExpansion tag m -> Ondim tag m ()
+putExpansion :: Monad m => Text -> SomeExpansion m -> Ondim m ()
 putExpansion key ex =
   modifyOndimS \s -> s {expansions = insertExpansion key ex (expansions s)}
 
-type ExpansionMap tag m = Writer [(Text, Maybe (SomeExpansion tag m))] ()
+type ExpansionMap m = Writer [(Text, Maybe (SomeExpansion m))] ()
 
 infixr 0 #<>
 
@@ -210,44 +210,44 @@ unbind k = k #<> Nothing
 
 infixr 0 ##
 
-(##) :: Typeable t => Text -> Expansion tag m t -> ExpansionMap tag m
+(##) :: Typeable t => Text -> Expansion m t -> ExpansionMap m
 name ## ex = name #<> Just $ toSomeExpansion ex
 
 infixr 0 #@
 
-(#@) :: Text -> Text -> ExpansionMap tag m
+(#@) :: Text -> Text -> ExpansionMap m
 name #@ ex = name #<> Just $ TextData ex
 
 infixr 0 #*
 
-(#*) :: Text -> GlobalExpansion tag m -> ExpansionMap tag m
+(#*) :: Text -> GlobalExpansion m -> ExpansionMap m
 name #* ex = name #<> Just $ GlobalExpansion ex
 
 infixr 0 #.
 
-(#.) :: Text -> ExpansionMap tag m -> ExpansionMap tag m
+(#.) :: Text -> ExpansionMap m -> ExpansionMap m
 name #. ex =
   name #<> Just . Namespace $
     foldl' (flip $ uncurry insertExpansion) mempty (mapMaybe sequence $ execWriter ex)
 
-type FilterMap tag m = Writer [(Text, Maybe (SomeFilter tag m))] ()
+type FilterMap m = Writer [(Text, Maybe (SomeFilter m))] ()
 
 infixr 0 $#
 
-($#) :: Typeable t => Text -> Filter tag m t -> FilterMap tag m
+($#) :: Typeable t => Text -> Filter m t -> FilterMap m
 name $# ex = name #<> Just $ toSomeFilter ex
 
 infixr 0 $*
 
-($*) :: Typeable t => Text -> Filter tag m t -> FilterMap tag m
+($*) :: Typeable t => Text -> Filter m t -> FilterMap m
 name $* ex = name #<> Just $ toSomeFilter ex
 
 -- | Infix version of @withExpansions@ to bind using MapSyntax.
 binding ::
   Monad m =>
-  Ondim tag m a ->
-  ExpansionMap tag m ->
-  Ondim tag m a
+  Ondim m a ->
+  ExpansionMap m ->
+  Ondim m a
 binding o exps =
   let kvs = execWriter exps
    in foldl' (flip $ uncurry withExpansion) o kvs
@@ -255,9 +255,9 @@ binding o exps =
 -- | Infix version of @withFilters@ to bind using MapSyntax.
 bindingFilters ::
   Monad m =>
-  Ondim tag m a ->
-  FilterMap tag m ->
-  Ondim tag m a
+  Ondim m a ->
+  FilterMap m ->
+  Ondim m a
 bindingFilters o filts =
   let kvs = execWriter filts
    in foldl' (flip $ uncurry withFilter) o kvs
@@ -265,56 +265,56 @@ bindingFilters o filts =
 -- Children
 
 children ::
-  forall tag t.
-  ( OndimNode tag t
+  forall t.
+  ( OndimNode t
   ) =>
   t ->
   [t]
 children = getSubstructure @t
 
 liftChildren ::
-  forall t tag m.
-  ( OndimNode tag t,
+  forall t m.
+  ( OndimNode t,
     Monad m
   ) =>
-  Expansion tag m t
-liftChildren = liftNodes . children @tag
+  Expansion m t
+liftChildren = liftNodes . children
 
 -- Attributes
 
 attributes ::
-  forall t tag m.
-  (OndimNode tag t, Monad m) =>
+  forall t m.
+  (OndimNode t, Monad m) =>
   t ->
-  Ondim tag m [Attribute]
-attributes = liftNodes . getAttrs @tag
+  Ondim m [Attribute]
+attributes = liftNodes . getAttrs
 
 lookupAttr ::
-  (Monad m, OndimNode tag t) =>
+  (Monad m, OndimNode t) =>
   Text ->
   t ->
-  Ondim tag m (Maybe Text)
+  Ondim m (Maybe Text)
 lookupAttr key = fmap (L.lookup key) . attributes
 
 fromTemplate ::
-  forall tag m t.
-  ( OndimNode tag t,
+  forall m t.
+  ( OndimNode t,
     Monad m
   ) =>
   [t] ->
-  Expansion tag m t
+  Expansion m t
 fromTemplate tpl inner =
   liftNodes tpl `binding` do
     "this.children" ## const (liftChildren inner)
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
-callExpansion :: forall t tag m. GlobalConstraints tag m t => Text -> Expansion tag m t
+callExpansion :: forall t m. GlobalConstraints m t => Text -> Expansion m t
 callExpansion name arg = do
   exps <- getExpansion name
   maybe (throwNotBound name) ($ arg) exps
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
-callText :: forall tag m. Monad m => Text -> Ondim tag m Text
+callText :: forall m. Monad m => Text -> Ondim m Text
 callText name = do
   exps <- getTextData name
   maybe (throwNotBound name) pure exps

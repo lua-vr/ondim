@@ -13,22 +13,22 @@ newtype TemplateLoadingError = TemplateLoadingException String
   deriving anyclass (Exception)
 
 loadTemplatesDynamic' ::
-  forall m n tplTypes tag.
+  forall m n tplTypes.
   (Ord tplTypes) =>
   (MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   -- | Patterns to look for.
   [(tplTypes, FilePattern)] ->
   -- | Insertion
-  (tplTypes -> Text -> ByteString -> OndimState tag n -> OndimState tag n) ->
+  (tplTypes -> Text -> ByteString -> OndimState n -> OndimState n) ->
   -- | Places to look for templates, in descending order of priority.
   [FilePath] ->
-  m (OndimState tag n, (OndimState tag n -> m ()) -> m ())
+  m (OndimState n, (OndimState n -> m ()) -> m ())
 loadTemplatesDynamic' patts ins places =
   let sources = fromList (zip (zip [1 ..] places) places)
       patterns = patts
       exclude = []
       initial = mempty
-      handler :: Change (Int, FilePath) tplTypes -> m (OndimState tag n -> OndimState tag n)
+      handler :: Change (Int, FilePath) tplTypes -> m (OndimState n -> OndimState n)
       handler chg =
         appEndo . mconcat . coerce . join
           <$> forM (toPairs chg) \(tplType, chg') ->

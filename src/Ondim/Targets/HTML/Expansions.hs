@@ -7,8 +7,8 @@ import Ondim.Targets.HTML.Instances
 bindDefaults ::
   forall m t.
   Monad m =>
-  Ondim HtmlTag m t ->
-  Ondim HtmlTag m t
+  Ondim m t ->
+  Ondim m t
 bindDefaults st =
   st
     `binding` do
