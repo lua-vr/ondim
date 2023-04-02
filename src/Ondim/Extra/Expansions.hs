@@ -152,6 +152,9 @@ bind node = do
       attrs' <- attributes inner
       liftChildren node
         `binding` do
+          -- Note to self: writing "this.children" is intentional. rebember that
+          -- using `#.` would mean other stuff under the namespace is erased. We
+          -- don't want that.
           "this.children" ## const (liftChildren inner)
           forM_ attrs' \attr ->
             "this." <> fst attr #@ snd attr
