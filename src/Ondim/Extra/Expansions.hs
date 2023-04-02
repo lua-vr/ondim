@@ -214,10 +214,11 @@ notBoundFilter validIds original nodes
   | otherwise = result
   where
     result =
-      nodes >>= mapM \node ->
-        case identify node of
-          Just name | name `notMember` validIds -> throwNotBound name
-          _ -> return node
+      case identify original of
+        Just name
+          | name `notMember` validIds ->
+              ifM (isJust <$> getExpansion @t name) nodes (throwNotBound name)
+        _ -> nodes
 
 mbAttrFilter :: Monad m => Filter m Attribute
 mbAttrFilter (k, _) x
