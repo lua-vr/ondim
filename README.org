@@ -2,53 +2,57 @@
 
 #+html: <img src="https://upload.wikimedia.org/wikipedia/commons/0/0d/An_alphabet_of_celebrities_-_U.jpg" align="right" width="30%">
 
-Ondim is a library for creating templating engines generically, inspired by Heist. It also includes HTML, Pandoc and LaTeX[fn:1] examples that work out-of-the-box. 
+Ondim is a library for creating templating engines for arbitrary formats, inspired by Heist (which only works for HTML). It also includes HTML, Pandoc and LaTeX[fn:1] examples that work out-of-the-box. 
 
-The main idea is to reuse existing libraries that will provide the parser and the language's syntax, and easily build an "expansion" layer on top. If you are familiar with Heist, for HTML this is done by binding /named expansions/ (in Heist they are called Splices) that programatically transform the contents of HTML elements whose tags match the name.
+The main idea is to reuse existing libraries that will provide the target  language's parser, types and renderer, and easily build an "expansion" layer on top. If you are familiar with Heist, for HTML this is done by binding /named expansions/ (in Heist they are called Splices) that programatically transform the contents of HTML elements whose tags match the name.
 
-For instance, this is how one can define an if/else expansion with ~Ondim~:
+For instance, this is how you could define an if/else expansion with ~Ondim~:
 #+begin_src haskell
-ifElse :: forall tag t.
-  (OndimNode tag t, HasSub tag t t) => Bool -> Expansion tag t
+ifElse :: (Monad m, OndimNode t) => Bool -> Expansion m t
 ifElse cond node = do
-  els <- inhibitingExpansions $ children node
-  let (yes, drop 1 -> no) =
-        break ((Just "else" ==) . identify @tag) els
+  let els = children node
+      yes = filter ((Just "else" /=) . identify) els
+      no =
+        maybe [] children $
+          find ((Just "else" ==) . identify) els
   if cond
     then liftNodes yes
     else liftNodes no
 #+end_src
 
-Now, suppose you have a value ~isCat :: Bool~ and you want your templates to choose between two HTML snippets depending on this value. If you bind ~ifElse isCat~ to the name ~if-cat~,
+Now, suppose you have a variable ~isCat :: Bool~ and you want your templates to choose between two snippets depending on its value. Such HTML template could have type ~[HtmlNode]~, so that if you "lift" it into the Ondim monad binding ~ifElse isCat~ to the name ~if-cat~,
 
 #+begin_src haskell
-{- other code -}
-`binding` do
-  "if-cat" ## ifElse isCat
+liftNodes myTemplateContent
+  `binding` do
+    "if-cat" #* ifElse isCat
 #+end_src
 
-you can now write in your HTML templates:
+you can now write in your HTML templates...
 
 #+begin_src html
 <if-cat>
   <p>I have a <i>beautiful</i> cat!</p>
-  <else />
-  <p>I don't have a cat 😭</p>
+  <else>
+    <p>I don't have a cat 😭</p>
+  </else>
 </if-cat>
 #+end_src
 
-The beauty of ondim (and one aspect that takes it further from Heist) is that the ~ifElse~ splice is polymorphic on the format type, so we are not restricted to HTML. In a Pandoc backend, the same template could be written as:
+...and the output will depend on the value of ~isCat~.
+
+The beauty of ondim (and one aspect that takes it further from Heist) is that the ~ifElse~ splice is polymorphic on the format type, so the same code works for formats other than HTML. In a Pandoc setting, the same code above would work if src_haskell{myTemplateContent} had type src_haskell{[Block]}, and the same template could be written as:
 #+begin_src markdown
-:::: e:if-cat
+::: if-cat
 I have a _beautiful_ cat!
 
-::: e:else
-:::
+:::: else
 I don't have a cat :sob:
 ::::
+:::
 #+end_src
-This is written in plain Pandoc markdown, and meant to be parsed by the Pandoc reader itself. Note that instead of HTML tags, now we annotate the expansions with fenced divs and fenced spans (=this is [a fenced span]{#my-expansion}=).
+This is written in plain Pandoc markdown, and meant to be parsed by the Pandoc reader itself. Note that instead of HTML tags, now we annotate the expansions with [[https://pandoc.org/MANUAL.html#extension-fenced_divs][fenced divs]] and [[https://pandoc.org/MANUAL.html#extension-bracketed_spans][bracketed spans]].
 
-But HTML and Pandoc are just examples, each defined in just ~100 LOC in =Ondim.HTML= and =Ondim.Pandoc=. And in the latter, most of it is instantiating default Generic instances. Ondim makes it easy to define you own!
+But HTML and Pandoc are just examples, each defined in very few lines of code under =Ondim.Targets.HTML= and =Ondim.Targets.Pandoc=. And due to the use of =multiwalk='s generics, most of it is instantiating generic instances. Ondim makes it easy to define your own!
 
 [fn:1] LaTeX is todo
