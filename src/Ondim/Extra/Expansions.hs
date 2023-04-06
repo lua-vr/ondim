@@ -81,7 +81,7 @@ ifElse cond node = do
 {-# INLINEABLE ifElse #-}
 
 getTag :: [Attribute] -> Maybe Text
-getTag attrs = L.lookup "tag" attrs <|> (case attrs of [(s, "")] -> Just s; _ -> Nothing)
+getTag attrs = L.lookup "tag" attrs <|> viaNonEmpty (fst . head) attrs
 
 switchCases :: forall m. Text -> ExpansionMap m
 switchCases tag =
