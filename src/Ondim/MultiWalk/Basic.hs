@@ -40,7 +40,7 @@ type GlobalConstraints m t = (OndimNode t, Monad m)
 -- Filters
 
 type Filter m t = t -> Ondim m [t] -> Ondim m [t]
-type Filters m = HashMap Text (SomeFilter m)
+type Filters m = Map Text (SomeFilter m)
 type GlobalFilter m = forall a. GlobalConstraints m a => Filter m a
 
 data SomeFilter m where
@@ -74,8 +74,9 @@ instance Monoid (Expansions m) where
 data OndimState (m :: Type -> Type) = OndimState
   { -- | Named expansions
     expansions :: Expansions m,
-    -- | Similar to expansions, but are always applied after the expansion (the
-    -- purpose of the name is just to facilitate binding/unbinding).
+    -- | Similar to expansions, but are always applied after the expansion. The
+    -- purpose of the name is just to facilitate binding/unbinding and control
+    -- execution order, it respects lexicographic order on keys.
     filters :: Filters m
   }
   deriving (Generic)

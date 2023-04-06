@@ -106,7 +106,8 @@ where
 
 import Control.Monad.Writer.CPS
 import Control.MultiWalk.HasSub (AllMods, GSubTag, SelSpec (..), SubSpec (..))
-import Data.HashMap.Strict qualified as Map
+import Data.HashMap.Strict qualified as HMap
+import Data.Map qualified as Map
 import Data.List qualified as L
 import Ondim.MultiWalk.Core
 import Prelude hiding (All)
@@ -173,11 +174,11 @@ withFilter name ex st = do
   Ondim $ modify' \s -> s {filters = insOrDel ex (filters s)}
   st <* modifyOndimS \s -> s {filters = insOrDel pEx (filters s)}
   where
-    insOrDel = maybe (Map.delete name) (Map.insert name)
+    insOrDel x = Map.alter (const x) name
 
 -- | "Bind" new expansions locally.
 withExpansions :: Monad m => Expansions m -> Ondim m a -> Ondim m a
-withExpansions (Expansions exps) o = foldr (\(k, v) -> withExpansion k (Just v)) o (Map.toList exps)
+withExpansions (Expansions exps) o = foldr (\(k, v) -> withExpansion k (Just v)) o (HMap.toList exps)
 
 -- | "Bind" filters locally.
 withFilters :: Monad m => Filters m -> Ondim m a -> Ondim m a
