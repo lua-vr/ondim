@@ -173,7 +173,7 @@ liftNode ::
   t ->
   Ondim m [t]
 liftNode node = do
-  apFilters <- Ondim $ gets $ foldr (\f g -> f node . g) id . mapMaybe (getSomeFilter @t) . Map.elems . filters
+  apFilters <- Ondim $ gets $ foldr (\f g -> f node . g) id . mapMaybe (getSomeFilter @t) . toList . filters
   apFilters $
     case identify node of
       Just name -> expand name
