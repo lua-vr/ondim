@@ -4,8 +4,7 @@
 module Ondim.Targets.Pandoc.Instances where
 
 import Data.Text qualified as T
-import Ondim.MultiWalk.Combinators
-import Ondim.MultiWalk.Core (OndimNode (..), Attribute)
+import Ondim (Attribute, OndimNode (..), OneSub, ToSpec, Under, Converting, Conversible (..), SelSpec (..))
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Definition
 
@@ -15,23 +14,21 @@ getId = asum . map (T.stripPrefix "e:")
 instance OndimNode Pandoc where
   type
     ExpTypes Pandoc =
-      ToSpecList
-        '[ Block
-         ]
+      '[ ToSpec Block
+       ]
 
 instance OndimNode Block where
   type
     ExpTypes Block =
-      ToSpecList
-        '[ Inline,
-           Under [Inline] Inline,
-           Block,
-           Under [Block] Block,
-           Under ([Inline], [[Block]]) (Under [Inline] Inline),
-           Under ([Inline], [[Block]]) (Under [[Block]] (Under [Block] Block)),
-           Under Attr Attribute,
-           OneSub Text
-         ]
+      '[ ToSpec Inline,
+         ToSpec (Under [Inline] 'NoSel Inline),
+         ToSpec Block,
+         ToSpec (Under [Block] 'NoSel Block),
+         ToSpec (Under ([Inline], [[Block]]) 'NoSel (Under [Inline] 'NoSel Inline)),
+         ToSpec (Under ([Inline], [[Block]]) 'NoSel (Under [[Block]] 'NoSel (Under [Block] 'NoSel Block))),
+         ToSpec (Under Attr 'NoSel Attribute),
+         ToSpec (OneSub Text)
+       ]
   identify (Div (_, n, _) _) = getId n
   identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
@@ -39,12 +36,11 @@ instance OndimNode Block where
 instance OndimNode Inline where
   type
     ExpTypes Inline =
-      ToSpecList
-        '[ Inline,
-           Block,
-           Converting Attr Attribute,
-           OneSub Text,
-           Attribute
+        '[ ToSpec Inline,
+           ToSpec Block,
+           ToSpec (Converting Attr Attribute),
+           ToSpec (OneSub Text),
+           ToSpec Attribute
          ]
   identify (Span (_, n, _) _) = getId n
   identify _ = Nothing

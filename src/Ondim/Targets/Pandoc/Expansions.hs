@@ -14,17 +14,6 @@ import Ondim.Targets.Pandoc.Instances ()
 import Text.Pandoc.Definition
 import Text.Pandoc.Walk
 
-cons :: forall m. Monad m => Expansion m Block
-cons x = do
-  nodes <- liftChildren x
-  pure $
-    fromMaybe nodes do
-      (h0 :| nodes') <- nonEmpty nodes
-      (h1 :| nodes'') <- nonEmpty nodes'
-      let f :: [Inline] -> [Inline]
-          f y = getSubstructure @Inline h0 ++ y
-      pure $ modSubstructure @Inline f h1 : nodes''
-
 bindDefaults ::
   forall m t.
   Monad m =>
@@ -37,7 +26,6 @@ bindDefaults st =
       "switch" #* switchBound
       "bind" #* bind
       "scope" #* scope
-      "cons" ## cons
       "bind-text" ## bindText (stringify @Block)
       "bind-text" ## bindText (stringify @Inline)
     `bindingFilters` do

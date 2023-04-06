@@ -1,10 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ondim.MultiWalk.Core
   ( Ondim (..),
@@ -39,86 +39,28 @@ module Ondim.MultiWalk.Core
     Substructure (..),
     getSubstructure,
     getSubstructure',
-    modSubstructure,
     modSubstructureM,
     modSubstructureM',
     Attribute,
+    Under,
+    MatchWith,
+    Conversible (..),
+    Converting,
+    OneSub,
+    HasSub,
+    ToSpec,
+    ToSpecSel,
   )
 where
 
 import Control.Monad.Except (MonadError (..))
-import Control.MultiWalk.HasSub
 import Data.HashMap.Strict qualified as Map
 import Data.Text qualified as T
+import Ondim.MultiWalk.Basic
 import Type.Reflection (TypeRep, eqTypeRep, typeRep, type (:~~:) (HRefl))
 import Prelude hiding (All)
 
--- * Classes
-
-class
-  ( HasSub GSubTag (ExpTypes t) t,
-    All CanLift (ExpTypes t),
-    All (Substructure t) (ExpTypes t),
-    Typeable t
-  ) =>
-  OndimNode t
-  where
-  type ExpTypes t :: [SubSpec]
-  identify :: t -> Maybe Text
-  identify _ = Nothing
-  fromText :: Maybe (Text -> [t])
-  fromText = Nothing
-  getAttrs :: t -> [Attribute]
-  default getAttrs ::
-    ( OndimNode t,
-      All (Substructure Attribute) (ExpTypes t)
-    ) =>
-    t ->
-    [Attribute]
-  getAttrs = getSubstructure @Attribute
-
--- * Attributes
-
--- | Alias for attributes
-type Attribute = (Text, Text)
-
-instance OndimNode Text where
-  type ExpTypes Text = '[]
-
-instance OndimNode Attribute where
-  -- Manually defined instance for convenience
-  type ExpTypes Attribute = '[ 'SubSpec Text Text]
-  identify = Just . fst
-
-instance CanLift ('SubSpec Text Text) where
-  liftSub (x :: a) = mconcat <$> liftSub @('SubSpec [a] a) [x]
-
--- * Monad
-
-newtype Ondim m a = Ondim
-  { unOndimT ::
-      ReaderT OndimGS (StateT (OndimState m) (ExceptT OndimException m)) a
-  }
-  deriving newtype (Functor, Applicative, Monad, MonadIO, MonadError OndimException)
-
-instance MonadTrans Ondim where
-  lift = Ondim . lift . lift . lift
-
-instance MonadState s m => MonadState s (Ondim m) where
-  get = lift get
-  put x = lift (put x)
-
 -- * State data
-
-type GlobalConstraints m t = (OndimNode t, Monad m)
-
-type Filter m t = t -> Ondim m [t] -> Ondim m [t]
-
-type GlobalFilter m = forall a. GlobalConstraints m a => Filter m a
-
-data SomeFilter m where
-  SomeFilter :: TypeRep a -> Filter m a -> SomeFilter m
-  GlobalFilter :: GlobalFilter m -> SomeFilter m
 
 toSomeFilter :: Typeable a => Filter m a -> SomeFilter m
 toSomeFilter = SomeFilter typeRep
@@ -130,18 +72,6 @@ getSomeFilter (SomeFilter t v)
   | otherwise = Nothing
   where
     rep = typeRep :: TypeRep a
-
-type Filters m = HashMap Text (SomeFilter m)
-
-type Expansion m t = t -> Ondim m [t]
-
-type GlobalExpansion m = forall a. GlobalConstraints m a => Expansion m a
-
-data SomeExpansion m where
-  SomeExpansion :: TypeRep a -> Expansion m a -> SomeExpansion m
-  GlobalExpansion :: GlobalExpansion m -> SomeExpansion m
-  TextData :: Text -> SomeExpansion m
-  Namespace :: Expansions m -> SomeExpansion m
 
 toSomeExpansion :: Typeable a => Expansion m a -> SomeExpansion m
 toSomeExpansion = SomeExpansion typeRep
@@ -159,17 +89,6 @@ getSomeExpansion (SomeExpansion t v)
   | Just HRefl <- t `eqTypeRep` typeRep @a = Just v
   | otherwise = Nothing
 getSomeExpansion Namespace {} = Nothing
-
-newtype Expansions m = Expansions {getExpansions :: HashMap Text (SomeExpansion m)}
-
-instance Semigroup (Expansions m) where
-  (Expansions x) <> (Expansions y) = Expansions $ Map.unionWith f x y
-    where
-      f (Namespace n) (Namespace m) = Namespace $ n <> m
-      f z _ = z
-
-instance Monoid (Expansions m) where
-  mempty = Expansions mempty
 
 splitExpansionKey :: Text -> [Text]
 splitExpansionKey = T.split (\c -> c == '.' || c == ':')
@@ -203,39 +122,10 @@ deleteExpansion (splitExpansionKey -> keys) (Expansions es) = Expansions $ go ke
       Just (Namespace (Expansions n)) -> Just $ Namespace $ Expansions $ go ks n
       _ -> Nothing
 
--- | Ondim's expansion state
-data OndimState (m :: Type -> Type) = OndimState
-  { -- | Named expansions
-    expansions :: Expansions m,
-    -- | Similar to expansions, but are always applied after the expansion (the
-    -- purpose of the name is just to facilitate binding/unbinding).
-    filters :: Filters m
-  }
-  deriving (Generic)
-
-instance Semigroup (OndimState m) where
-  OndimState x1 y1 <> OndimState x2 y2 = OndimState (x1 <> x2) (y1 <> y2)
-
-instance Monoid (OndimState m) where
-  mempty = OndimState mempty mempty
-
--- | Ondim's global state
-data OndimGS = OndimGS
-  { expansionDepth :: Int,
-    expansionTrace :: [Text]
-  }
-  deriving (Read, Show, Generic)
-
 initialGS :: OndimGS
 initialGS = OndimGS 0 []
 
 -- * Exceptions
-
-data OndimException
-  = MaxExpansionDepthExceeded [Text]
-  | ExpansionNotBound Text [Text]
-  | CustomException Text [Text]
-  deriving (Show)
 
 throwNotBound ::
   Monad m =>
@@ -303,92 +193,13 @@ liftNodes ::
   Ondim m [t]
 liftNodes = foldMapM liftNode
 
-modSubLift ::
-  forall ls m t.
-  ( Monad m,
-    HasSub GSubTag ls t,
-    All CanLift ls
-  ) =>
-  t ->
-  Ondim m t
-modSubLift = modSub @GSubTag @ls @t (Proxy @CanLift) (\(_ :: Proxy s) -> liftSub @s)
-{-# INLINEABLE modSubLift #-}
-
-getSubstructure' ::
-  forall a ls t.
-  ( HasSub GSubTag ls t,
-    All (Substructure a) ls
-  ) =>
-  t ->
-  [a]
-getSubstructure' = getSub @GSubTag @ls @t (Proxy @(Substructure a)) (\(_ :: Proxy j) -> getSubs @a @j)
-
-getSubstructure ::
-  forall a t.
-  ( HasSub GSubTag (ExpTypes t) t,
-    All (Substructure a) (ExpTypes t)
-  ) =>
-  t ->
-  [a]
-getSubstructure = getSubstructure' @a @(ExpTypes t)
-
-modSubstructureM' ::
-  forall a ls t m.
-  ( HasSub GSubTag ls t,
-    All (Substructure a) ls,
-    Applicative m
-  ) =>
-  ([a] -> m [a]) ->
-  t ->
-  m t
-modSubstructureM' f = modSub @GSubTag @ls @t (Proxy @(Substructure a)) (\(_ :: Proxy j) -> modSubs @a @j f)
-
-modSubstructureM ::
-  forall a t m.
-  ( HasSub GSubTag (ExpTypes t) t,
-    All (Substructure a) (ExpTypes t),
-    Applicative m
-  ) =>
-  ([a] -> m [a]) ->
-  t ->
-  m t
-modSubstructureM = modSubstructureM' @a @(ExpTypes t)
-
-modSubstructure ::
-  forall a t.
-  ( HasSub GSubTag (ExpTypes t) t,
-    All (Substructure a) (ExpTypes t)
-  ) =>
-  ([a] -> [a]) ->
-  t ->
-  t
-modSubstructure f = runIdentity . modSubstructureM @a (Identity . f)
-
 -- | Lift only the substructures of a node.
 liftSubstructures :: forall m t. (Monad m, OndimNode t) => t -> Ondim m t
 liftSubstructures = modSubLift @(ExpTypes t)
 {-# INLINEABLE liftSubstructures #-}
 
-class CanLift (s :: SubSpec) where
-  liftSub ::
-    Monad m =>
-    SpecCarrier s ->
-    Ondim m (SpecCarrier s)
-
-class Substructure (a :: Type) (s :: SubSpec) where
-  getSubs :: SpecCarrier s -> [a]
-  modSubs :: Applicative m => ([a] -> m [a]) -> SpecCarrier s -> m (SpecCarrier s)
-
-instance OndimNode a => CanLift ('SubSpec [a] a) where
+instance {-# OVERLAPPABLE #-} (Carrier a ~ [a], OndimNode a) => CanLift a where
   liftSub = liftNodes
-
-instance {-# OVERLAPPABLE #-} Substructure a s where
-  getSubs = mempty
-  modSubs = const pure
-
-instance Substructure a ('SubSpec [a] a) where
-  getSubs = id
-  modSubs = id
 
 -- * Expansion context
 
@@ -417,3 +228,12 @@ expCtx name ctx = do
     then -- To avoid recursive expansions
       throwError (MaxExpansionDepthExceeded $ expansionTrace gst)
     else withDebugCtx (+ 1) (name :) ctx
+
+-- * Attributes
+
+instance OndimNode Text where
+  type ExpTypes Text = '[]
+
+instance OndimNode Attribute where
+  type ExpTypes Attribute = '[ToSpec (OneSub Text)]
+  identify = Just . fst
