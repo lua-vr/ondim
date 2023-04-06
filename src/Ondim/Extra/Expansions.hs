@@ -56,17 +56,11 @@ open node = do
 
 with :: GlobalExpansion m
 with node = do
-  name' <- viaNonEmpty (fst . head) <$> attributes node
-  name <- maybe (throwCustom "Expansion name not provided.") pure name'
   exps <- expansions <$> getOndimS
-  as <- fromMaybe "this" <$> lookupAttr "as" node
-  noOverwrite <- isJust <$> lookupAttr "no-overwrite" node
-  let expansion = lookupExpansion name exps
-      exists = isJust $ lookupExpansion as exps
-  withExpansion name Nothing $
-    if noOverwrite && exists
-      then liftChildren node
-      else withExpansion as expansion $ liftChildren node
+  actions <- attributes node <&> map \(k, v) ->
+    let expansion = lookupExpansion v exps
+     in withExpansion v Nothing . withExpansion k expansion
+  foldr ($) (liftChildren node) actions
 
 ifElse ::
   forall t m.
