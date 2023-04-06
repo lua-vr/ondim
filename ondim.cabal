@@ -43,7 +43,7 @@ library
                     Ondim.Extra.Expansions
                     Ondim.Extra.Loading
   other-modules:    Ondim.MultiWalk.Core
-                    Ondim.MultiWalk.Combinators
+                    Ondim.MultiWalk.Basic
   build-depends:    base >= 4.14 && < 5
                   , attoparsec
                   , unordered-containers

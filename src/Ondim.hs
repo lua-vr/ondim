@@ -1,8 +1,4 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
 
 {- | This module defines a user-friendly API over the core functionality
  (implemented in Ondim.MultiWalk.Core).
@@ -12,15 +8,19 @@ module Ondim
     OndimNode (..),
 
     -- * HasSub
-    HasSub (..),
+    HasSub,
     GSubTag,
     -- Spec
     SubSpec (..),
-    BuildSpec,
-    ToSpecList,
+    SelSpec (..),
+    ToSpec,
+    ToSpecSel,
     -- Combinators
     Under,
     MatchWith,
+    OneSub,
+    Conversible (..),
+    Converting,
 
     -- * Data types
     GlobalConstraints,
@@ -91,7 +91,6 @@ module Ondim
 
     -- * Structure
     getSubstructure,
-    modSubstructure,
     modSubstructureM,
     children,
     liftChildren,
@@ -99,17 +98,16 @@ module Ondim
     lookupAttr,
 
     -- * Auxiliary
-    All,
+    AllMods,
     Substructure,
     Attribute,
   )
 where
 
 import Control.Monad.Writer.CPS
-import Control.MultiWalk.HasSub (All, GSubTag, HasSub (..), SubSpec (..))
+import Control.MultiWalk.HasSub (AllMods, GSubTag, SelSpec (..), SubSpec (..))
 import Data.HashMap.Strict qualified as Map
 import Data.List qualified as L
-import Ondim.MultiWalk.Combinators
 import Ondim.MultiWalk.Core
 import Prelude hiding (All)
 

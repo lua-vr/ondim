@@ -5,16 +5,12 @@ module Ondim.Targets.HTML.Instances where
 
 import Data.Char (isSpace)
 import Data.Text qualified as T
-import Ondim.MultiWalk.Combinators
-  ( Conversible (convertFrom, convertTo),
-    Converting,
-    ToSpecList,
-  )
-import Ondim (OndimNode (..), Attribute)
+import Ondim (Attribute, OndimNode (..), OneSub, ToSpec, ToSpecSel, SelSpec (..), Converting, Conversible (..))
 import Text.XmlHtml qualified as X
 
--- | We use a new XML datatype so that we can group the node with the newline space
---   before it. This makes the output formatting much better.
+{- | We use a new XML datatype so that we can group the node with the newline space
+  before it. This makes the output formatting much better.
+-}
 data HtmlNode
   = Element {preNewline :: Bool, elementTag :: Text, elementAttrs :: [(Text, Text)], elementChildren :: [HtmlNode]}
   | TextNode Text
@@ -56,14 +52,19 @@ nodeText el@Element {} = foldMap nodeText (elementChildren el)
 deriving instance (Generic X.Document)
 
 instance OndimNode X.Document where
-  type ExpTypes X.Document = ToSpecList '[Converting [X.Node] HtmlNode]
+  type ExpTypes X.Document = '[ToSpec (Converting [X.Node] HtmlNode)]
 
 instance Conversible [X.Node] [HtmlNode] where
   convertTo = fromNodeList
   convertFrom = toNodeList
 
 instance OndimNode HtmlNode where
-  type ExpTypes HtmlNode = ToSpecList '[Attribute, HtmlNode]
+  type
+    ExpTypes HtmlNode =
+      '[ ToSpec Attribute,
+         ToSpec HtmlNode,
+         ToSpecSel ('ConsSel "TextNode") (OneSub Text)
+       ]
   identify (Element _ name _ _) = Just name
   identify _ = Nothing
   fromText = Just (one . TextNode)
