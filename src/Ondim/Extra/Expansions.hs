@@ -110,15 +110,15 @@ switchWithDefault ::
   Expansion m t
 switchWithDefault tag node = do
   let els = children node
+  match <- (`findM` els) \x -> do
+    caseTag <- getTag <$> attributes x
+    return $ nameIs "o:case" x && caseTag == Just tag
   fromMaybe (pure []) do
-    child <-
-      find (\x -> nameIs "o:case" x && hasTag x) els
-        <|> find (nameIs "o:default") els
+    child <- match <|> find (nameIs "o:default") els
     pure $ liftChildren child
   where
+    findM p = foldr (\x -> ifM (p x) (pure $ Just x)) (pure Nothing)
     nameIs n x = identify x == Just n
-    hasTag (getAttrs -> attrs) =
-      Just tag == getTag attrs
 
 ifBound :: forall t m. GlobalConstraints m t => Expansion m t
 ifBound node = do
