@@ -38,66 +38,84 @@ library
   -- other-modules:
 
   -- LANGUAGE extensions used by modules in this package.
-  exposed-modules:  Ondim
-                    Ondim.Extra
-                    Ondim.Extra.Expansions
-                    Ondim.Extra.Loading
-  other-modules:    Ondim.MultiWalk.Core
-                    Ondim.MultiWalk.Basic
-  build-depends:    base >= 4.14 && < 5
-                  , attoparsec
-                  , containers
-                  , unordered-containers
-                  , filepath
-                  , filepattern
-                  , mtl >= 2.3
-                  , monad-logger
-                  , multiwalk
-                  , relude
-                  , replace-attoparsec
-                  , text
-                  , unionmount
-                  , unliftio-core
+  exposed-modules:
+    Ondim
+    Ondim.Extra
+    Ondim.Extra.Expansions
+    Ondim.Extra.Loading
+
+  other-modules:
+    Ondim.MultiWalk.Basic
+    Ondim.MultiWalk.Core
+
+  build-depends:
+    , attoparsec
+    , base                  >=4.14 && <5
+    , containers
+    , filepath
+    , filepattern
+    , monad-logger
+    , mtl                   >=2.3
+    , multiwalk
+    , relude
+    , replace-attoparsec
+    , text
+    , unionmount
+    , unliftio-core
+    , unordered-containers
+
+  if flag(with-json)
+    exposed-modules: Ondim.Extra.BindJSON
+    build-depends:
+      , aeson
+      , scientific
 
   if flag(with-pandoc)
-    exposed-modules: Ondim.Targets.Pandoc
-                     Ondim.Targets.Pandoc.Instances
-                     Ondim.Targets.Pandoc.Expansions
-                     Ondim.Targets.Pandoc.Load
-    build-depends:   pandoc-types
-                   , pandoc
+    exposed-modules:
+      Ondim.Targets.Pandoc
+      Ondim.Targets.Pandoc.Expansions
+      Ondim.Targets.Pandoc.Instances
+      Ondim.Targets.Pandoc.Load
+
+    build-depends:
+      , pandoc
+      , pandoc-types
 
   if flag(with-html)
-    exposed-modules: Ondim.Targets.HTML
-                     Ondim.Targets.HTML.Instances
-                     Ondim.Targets.HTML.Expansions
-                     Ondim.Targets.HTML.Load
+    exposed-modules:
+      Ondim.Targets.HTML
+      Ondim.Targets.HTML.Expansions
+      Ondim.Targets.HTML.Instances
+      Ondim.Targets.HTML.Load
+
     build-depends:   xmlhtml
 
-  mixins:           base hiding (Prelude)
-                  , relude (Relude as Prelude)
-                  , relude
-  hs-source-dirs:   src
-  default-language: Haskell2010
-  ghc-options:     -Wall -fprint-potential-instances
+  mixins:
+    base hiding (Prelude),
+    relude (Relude as Prelude),
+    relude
+
+  hs-source-dirs:     src
+  default-language:   Haskell2010
+  ghc-options:        -Wall -fprint-potential-instances
   default-extensions:
-    TupleSections
-    OverloadedStrings
-    ImportQualifiedPost
-    GeneralizedNewtypeDeriving
-    ScopedTypeVariables
     BlockArguments
-    ViewPatterns
     DataKinds
-    TypeOperators
-    TypeApplications
-    DerivingStrategies
     DeriveAnyClass
     DeriveGeneric
-    LambdaCase
-    StandaloneDeriving
-    KindSignatures
-    TypeFamilies
+    DerivingStrategies
     FlexibleContexts
     FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    KindSignatures
+    LambdaCase
     MultiParamTypeClasses
+    OverloadedStrings
+    ScopedTypeVariables
+    StandaloneDeriving
+    TupleSections
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    ViewPatterns
