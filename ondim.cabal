@@ -82,13 +82,12 @@ library
       , pandoc-types
 
   if flag(with-html)
+    build-depends:   xmlhtml
     exposed-modules:
       Ondim.Targets.HTML
       Ondim.Targets.HTML.Expansions
       Ondim.Targets.HTML.Instances
       Ondim.Targets.HTML.Load
-
-    build-depends:   xmlhtml
 
   mixins:
     base hiding (Prelude),

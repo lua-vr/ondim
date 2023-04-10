@@ -24,6 +24,12 @@ lookupAttr' key node =
   maybe (throwCustom $ "Missing '" <> key <> "' argument.") pure . L.lookup key
     =<< attributes node
 
+getTag :: [Attribute] -> Maybe Text
+getTag attrs = L.lookup "tag" attrs <|> viaNonEmpty (fst . head) attrs
+
+identifiesAs :: OndimNode t => [Text] -> t -> Bool
+identifiesAs n = (Just n ==) . fmap splitExpansionKey . identify
+
 -- * Expansions
 
 ignore :: forall t m. Monad m => Expansion m t
@@ -72,17 +78,14 @@ ifElse ::
   Expansion m t
 ifElse cond node = do
   let els = children node
-      yes = filter ((Just "o:else" /=) . identify) els
+      yes = filter (not . identifiesAs ["o", "else"]) els
       no =
         maybe [] children $
-          find ((Just "o:else" ==) . identify) els
+          find (identifiesAs ["o", "else"]) els
   if cond
     then liftNodes yes
     else liftNodes no
 {-# INLINEABLE ifElse #-}
-
-getTag :: [Attribute] -> Maybe Text
-getTag attrs = L.lookup "tag" attrs <|> viaNonEmpty (fst . head) attrs
 
 switchCases :: forall m. Text -> ExpansionMap m
 switchCases tag =
@@ -113,13 +116,12 @@ switchWithDefault tag node = do
   let els = children node
   match <- (`findM` els) \x -> do
     caseTag <- getTag <$> attributes x
-    return $ nameIs "o:case" x && caseTag == Just tag
+    return $ identifiesAs ["o", "case"] x && caseTag == Just tag
   fromMaybe (pure []) do
-    child <- match <|> find (nameIs "o:default") els
+    child <- match <|> find (identifiesAs ["o", "default"]) els
     pure $ liftChildren child
   where
     findM p = foldr (\x -> ifM (p x) (pure $ Just x)) (pure Nothing)
-    nameIs n x = identify x == Just n
 
 ifBound :: forall t m. GlobalConstraints m t => Expansion m t
 ifBound node = do
@@ -133,7 +135,7 @@ switchBound :: forall t m. GlobalConstraints m t => Expansion m t
 switchBound node = do
   tag <- getTag <$> attributes node
   flip (maybe $ pure []) tag \tag' -> do
-    tagC <- fromMaybe "o:default" <$> getTextData tag'
+    tagC <- fromMaybe "" <$> getTextData tag'
     switchWithDefault tagC node
 
 -- Binding

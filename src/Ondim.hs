@@ -16,6 +16,7 @@ module Ondim
     ToSpec,
     ToSpecSel,
     -- Combinators
+    Trav,
     Under,
     MatchWith,
     OneSub,

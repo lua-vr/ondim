@@ -124,10 +124,10 @@ class
 data OCTag
 
 type family CombinatorCarrier (b :: Type) :: Type where
-  CombinatorCarrier (Identity a) = [a]
   CombinatorCarrier (Under b s a) = b
   CombinatorCarrier (MatchWith s a) = s
   CombinatorCarrier (OneSub a) = a
+  CombinatorCarrier (Trav f a) = f (Carrier a)
   CombinatorCarrier (Converting b a) = b
   CombinatorCarrier a = [a]
 
@@ -206,6 +206,26 @@ instance
   where
   getSubs = getSubs @k @a . one
   modSubs f (x :: a) = mconcat <$> modSubs @k @a f [x]
+
+-- | Use this for matching with a type inside a traversable functor.
+data Trav (f :: Type -> Type) (a :: Type)
+
+instance
+  ( CanLift a,
+    Traversable f
+  ) =>
+  CanLift (Trav f a)
+  where
+  liftSub = traverse (liftSub @a)
+
+instance
+  ( Substructure s a,
+    Traversable f
+  ) =>
+  Substructure s (Trav f a)
+  where
+  getSubs = foldMap (getSubs @s @a)
+  modSubs f = traverse (modSubs @s @a f)
 
 {- | Use this for matching a subcomponent nested inside another type. Useful if
 you don't want to add the middle type to the list of expansible types.

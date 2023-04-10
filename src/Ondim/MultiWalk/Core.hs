@@ -46,6 +46,7 @@ module Ondim.MultiWalk.Core
     MatchWith,
     Conversible (..),
     Converting,
+    Trav,
     OneSub,
     HasSub,
     ToSpec,
@@ -54,6 +55,7 @@ module Ondim.MultiWalk.Core
 where
 
 import Control.Monad.Except (MonadError (..))
+import Data.Char (isLetter)
 import Data.HashMap.Strict qualified as Map
 import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
@@ -91,7 +93,7 @@ getSomeExpansion (SomeExpansion t v)
 getSomeExpansion Namespace {} = Nothing
 
 splitExpansionKey :: Text -> [Text]
-splitExpansionKey = T.split (\c -> c == '.' || c == ':')
+splitExpansionKey = T.split (\c -> c /= '-' && not (isLetter c))
 
 lookupExpansion :: Text -> Expansions m -> Maybe (SomeExpansion m)
 lookupExpansion (splitExpansionKey -> keys) (Expansions e) = go keys e

@@ -34,7 +34,7 @@ loadTemplatesDynamic' patts ins places =
           <$> forM (toPairs chg) \(tplType, chg') ->
             forM (toPairs chg') \(file, fa) ->
               let name =
-                    fromString $
+                    toText $
                       intercalate ":" $
                         splitDirectories $
                           dropExtensions file

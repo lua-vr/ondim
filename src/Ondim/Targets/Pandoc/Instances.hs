@@ -4,7 +4,7 @@
 module Ondim.Targets.Pandoc.Instances where
 
 import Data.Text qualified as T
-import Ondim (Attribute, OndimNode (..), OneSub, ToSpec, Under, Converting, Conversible (..), SelSpec (..), substructureAttributes)
+import Ondim
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Definition
 
@@ -21,15 +21,15 @@ instance OndimNode Block where
   type
     ExpTypes Block =
       '[ ToSpec Inline,
-         ToSpec (Under [Inline] 'NoSel Inline),
+         ToSpec (Trav [] Inline),
          ToSpec Block,
-         ToSpec (Under [Block] 'NoSel Block),
-         ToSpec (Under ([Inline], [[Block]]) 'NoSel (Under [Inline] 'NoSel Inline)),
-         ToSpec (Under ([Inline], [[Block]]) 'NoSel (Under [[Block]] 'NoSel (Under [Block] 'NoSel Block))),
+         ToSpec (Trav [] Block),
+         ToSpec (Under ([Inline], [[Block]]) 'NoSel Inline),
+         ToSpec (Trav ((,) [Inline]) (Trav [] Block)),
          ToSpec (Converting Attr Attribute),
          ToSpec (OneSub Text)
        ]
-  identify (Div (_, n, _) _) = getId n
+  identify (Div (_, n, _) _) =  getId n
   identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
   attributes = substructureAttributes
@@ -37,12 +37,12 @@ instance OndimNode Block where
 instance OndimNode Inline where
   type
     ExpTypes Inline =
-        '[ ToSpec Inline,
-           ToSpec Block,
-           ToSpec (Converting Attr Attribute),
-           ToSpec (OneSub Text),
-           ToSpec Attribute
-         ]
+      '[ ToSpec Inline,
+         ToSpec Block,
+         ToSpec (Converting Attr Attribute),
+         ToSpec (OneSub Text),
+         ToSpec Attribute
+       ]
   identify (Span (_, n, _) _) = getId n
   identify _ = Nothing
   fromText = Just (toList . B.text)
