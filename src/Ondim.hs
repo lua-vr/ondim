@@ -94,7 +94,7 @@ module Ondim
     modSubstructureM,
     children,
     liftChildren,
-    attributes,
+    substructureAttributes,
     lookupAttr,
 
     -- * Auxiliary
@@ -107,8 +107,8 @@ where
 import Control.Monad.Writer.CPS
 import Control.MultiWalk.HasSub (AllMods, GSubTag, SelSpec (..), SubSpec (..))
 import Data.HashMap.Strict qualified as HMap
-import Data.Map qualified as Map
 import Data.List qualified as L
+import Data.Map qualified as Map
 import Ondim.MultiWalk.Core
 import Prelude hiding (All)
 
@@ -281,12 +281,9 @@ liftChildren = liftNodes . children
 
 -- Attributes
 
-attributes ::
-  forall t m.
-  (OndimNode t, Monad m) =>
-  t ->
-  Ondim m [Attribute]
-attributes = liftNodes . getAttrs
+-- | You can use this as a default instance for the 'attributes' class method.
+substructureAttributes :: (OndimNode t, AllMods (Substructure Attribute) (ExpTypes t), Monad m) => t -> Ondim m [Attribute]
+substructureAttributes = liftNodes . getSubstructure @Attribute
 
 lookupAttr ::
   (Monad m, OndimNode t) =>

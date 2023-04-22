@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -117,14 +116,8 @@ class
   identify _ = Nothing
   fromText :: Maybe (Text -> [t])
   fromText = Nothing
-  getAttrs :: t -> [Attribute]
-  default getAttrs ::
-    ( OndimNode t,
-      AllMods (Substructure Attribute) (ExpTypes t)
-    ) =>
-    t ->
-    [Attribute]
-  getAttrs = getSubstructure @Attribute
+  attributes :: Monad m => t -> Ondim m [Attribute]
+  attributes _ = pure []
 
 -- * Combinators
 
