@@ -57,9 +57,10 @@ open node = do
 with :: GlobalExpansion m
 with node = do
   exps <- expansions <$> getOndimS
-  actions <- attributes node <&> map \(k, v) ->
-    let expansion = lookupExpansion v exps
-     in withExpansion v Nothing . withExpansion k expansion
+  actions <-
+    attributes node <&> map \(k, v) ->
+      let expansion = lookupExpansion v exps
+       in withExpansion v Nothing . withExpansion k expansion
   foldr ($) (liftChildren node) actions
 
 ifElse ::
@@ -203,12 +204,14 @@ attrSub :: Monad m => Filter m Text
 attrSub t _ = one <$> attrEdit t
 
 notBoundFilter :: forall t m. (GlobalConstraints m t) => Set Text -> Filter m t
-notBoundFilter validIds original nodes
-  | any (("@try" ==) . fst) (getAttrs original) =
+notBoundFilter validIds original nodes = do
+  attrs <- attributes original
+  if any (("@try" ==) . fst) attrs
+    then
       result `catchError` \case
         ExpansionNotBound {} -> return []
         e -> throwError e
-  | otherwise = result
+    else result
   where
     result =
       case identify original of
