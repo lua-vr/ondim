@@ -285,7 +285,7 @@ getSubstructure' = HS.getSub @OCTag @GSubTag @ls @t (Proxy @(Substructure a)) (\
 
 getSubstructure ::
   forall a t.
-  ( HasSub GSubTag (ExpTypes t) t,
+  ( OndimNode t,
     AllMods (Substructure a) (ExpTypes t)
   ) =>
   t ->
@@ -305,7 +305,7 @@ modSubstructureM' f = HS.modSub @OCTag @GSubTag @ls @t (Proxy @(Substructure a))
 
 modSubstructureM ::
   forall a t m.
-  ( HasSub GSubTag (ExpTypes t) t,
+  ( OndimNode t,
     AllMods (Substructure a) (ExpTypes t),
     Applicative m
   ) =>
