@@ -4,7 +4,7 @@
 module Ondim.Targets.Pandoc.Instances where
 
 import Data.Text qualified as T
-import Ondim (Attribute, OndimNode (..), OneSub, ToSpec, Under, Converting, Conversible (..), SelSpec (..))
+import Ondim (Attribute, OndimNode (..), OneSub, ToSpec, Under, Converting, Conversible (..), SelSpec (..), substructureAttributes)
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Definition
 
@@ -26,12 +26,13 @@ instance OndimNode Block where
          ToSpec (Under [Block] 'NoSel Block),
          ToSpec (Under ([Inline], [[Block]]) 'NoSel (Under [Inline] 'NoSel Inline)),
          ToSpec (Under ([Inline], [[Block]]) 'NoSel (Under [[Block]] 'NoSel (Under [Block] 'NoSel Block))),
-         ToSpec (Under Attr 'NoSel Attribute),
+         ToSpec (Converting Attr Attribute),
          ToSpec (OneSub Text)
        ]
   identify (Div (_, n, _) _) = getId n
   identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
+  attributes = substructureAttributes
 
 instance OndimNode Inline where
   type
@@ -45,6 +46,7 @@ instance OndimNode Inline where
   identify (Span (_, n, _) _) = getId n
   identify _ = Nothing
   fromText = Just (toList . B.text)
+  attributes = substructureAttributes
 
 instance Conversible Attr [Attribute] where
   convertTo (x, y, z) =
