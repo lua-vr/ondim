@@ -204,6 +204,16 @@ instance
   where
   liftSub (x :: a) = mconcat <$> liftSub @a [x]
 
+instance
+  ( Substructure k a,
+    Carrier a ~ [a],
+    Monoid a
+  ) =>
+  Substructure k (OneSub a)
+  where
+  getSubs = getSubs @k @a . one
+  modSubs f (x :: a) = mconcat <$> modSubs @k @a f [x]
+
 {- | Use this for matching a subcomponent nested inside another type. Useful if
 you don't want to add the middle type to the list of expansible types.
 -}
@@ -239,6 +249,15 @@ instance
   CanLift (Converting s a)
   where
   liftSub = fmap convertFrom . liftSub @a . convertTo
+
+instance
+  ( Substructure k a,
+    Conversible s (Carrier a)
+  ) =>
+  Substructure k (Converting s a)
+  where
+  getSubs = getSubs @k @a . convertTo
+  modSubs f = fmap convertFrom . modSubs @k @a f . convertTo
 
 -- * Lifting functions
 
