@@ -239,8 +239,8 @@ name $# ex = name #<> Just $ toSomeFilter ex
 
 infixr 0 $*
 
-($*) :: Typeable t => Text -> Filter m t -> FilterMap m
-name $* ex = name #<> Just $ toSomeFilter ex
+($*) :: Text -> GlobalFilter m -> FilterMap m
+name $* ex = name #<> Just $ GlobalFilter ex
 
 -- | Infix version of @withExpansions@ to bind using MapSyntax.
 binding ::
