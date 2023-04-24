@@ -24,8 +24,8 @@ lookupAttr' key node =
   maybe (throwCustom $ "Missing '" <> key <> "' argument.") pure . L.lookup key
     =<< attributes node
 
-getTag :: [Attribute] -> Maybe Text
-getTag attrs = L.lookup "tag" attrs <|> viaNonEmpty (fst . head) attrs
+getSingleAttr :: Text -> [Attribute] -> Maybe Text
+getSingleAttr name attrs = L.lookup name attrs <|> viaNonEmpty (fst . head) attrs
 
 identifiesAs :: OndimNode t => [Text] -> t -> Bool
 identifiesAs n = (Just n ==) . fmap splitExpansionKey . identify
@@ -92,7 +92,7 @@ switchCases tag =
   "o:case" #* \(caseNode :: t) -> do
     attrs <- attributes @t caseNode
     withoutExpansions ["o:case"] $
-      if Just tag == getTag attrs
+      if Just tag == getSingleAttr "tag" attrs
         then liftChildren caseNode
         else pure []
 {-# INLINEABLE switchCases #-}
@@ -115,7 +115,7 @@ switchWithDefault ::
 switchWithDefault tag node = do
   let els = children node
   match <- (`findM` els) \x -> do
-    caseTag <- getTag <$> attributes x
+    caseTag <- getSingleAttr "tag" <$> attributes x
     return $ identifiesAs ["o", "case"] x && caseTag == Just tag
   fromMaybe (pure []) do
     child <- match <|> find (identifiesAs ["o", "default"]) els
@@ -126,14 +126,14 @@ switchWithDefault tag node = do
 ifBound :: forall t m. GlobalConstraints m t => Expansion m t
 ifBound node = do
   attrs <- attributes node
-  bound <- case getTag attrs of
+  bound <- case getSingleAttr "exp" attrs of
     Just tag -> isJust <$> getExpansion @t tag
     Nothing -> pure False
   ifElse bound node
 
 switchBound :: forall t m. GlobalConstraints m t => Expansion m t
 switchBound node = do
-  tag <- getTag <$> attributes node
+  tag <- getSingleAttr "exp" <$> attributes node
   flip (maybe $ pure []) tag \tag' -> do
     tagC <- fromMaybe "" <$> getTextData tag'
     switchWithDefault tagC node
@@ -144,7 +144,7 @@ switchBound node = do
 bind :: forall t m. GlobalConstraints m t => Expansion m t
 bind node = do
   attrs <- attributes node
-  whenJust (getTag attrs) $ \name -> do
+  whenJust (getSingleAttr "name" attrs) $ \name -> do
     putExpansion name $ toSomeExpansion $ \inner -> do
       attrs' <- attributes inner
       liftChildren node
@@ -167,7 +167,7 @@ bindText ::
 bindText toTxt self = do
   attrs <- attributes self
   child <- liftChildren self
-  whenJust (getTag attrs) $ \tag -> do
+  whenJust (getSingleAttr "name" attrs) $ \tag -> do
     putExpansion tag $ TextData $ foldMap toTxt child
   pure []
 
