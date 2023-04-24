@@ -33,6 +33,10 @@ flag with-html
   description: Include HTML (xmlhtml) definitions and dependencies.
   default:     True
 
+flag with-whiskers
+  description: Include Whiskers definitions and dependencies.
+  default:     True
+
 library
   -- Modules included in this executable, other than Main.
   -- other-modules:
@@ -88,6 +92,15 @@ library
       Ondim.Targets.HTML.Expansions
       Ondim.Targets.HTML.Instances
       Ondim.Targets.HTML.Load
+
+  if flag(with-whiskers)
+    build-depends:   megaparsec
+    other-modules:   Ondim.Targets.Whiskers.Parser
+    exposed-modules:
+      Ondim.Targets.Whiskers
+      Ondim.Targets.Whiskers.Expansions
+      Ondim.Targets.Whiskers.Instances
+      Ondim.Targets.Whiskers.Load
 
   mixins:
     base hiding (Prelude),
