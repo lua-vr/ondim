@@ -58,6 +58,7 @@ import Data.Char (isLetter)
 import Data.HashMap.Strict qualified as Map
 import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
+import Ondim.MultiWalk.Combinators
 import Type.Reflection (TypeRep, eqTypeRep, typeRep, type (:~~:) (HRefl))
 import Prelude hiding (All)
 

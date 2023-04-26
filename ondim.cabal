@@ -50,6 +50,7 @@ library
 
   other-modules:
     Ondim.MultiWalk.Basic
+    Ondim.MultiWalk.Combinators
     Ondim.MultiWalk.Core
 
   build-depends:

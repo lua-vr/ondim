@@ -7,21 +7,8 @@ module Ondim
   ( -- * Classes
     OndimNode (..),
 
-    -- * HasSub
-    HasSub,
-    GSubTag,
-    -- Spec
-    SubSpec (..),
-    SelSpec (..),
-    ToSpec,
-    ToSpecSel,
-    -- Combinators
-    Trav,
-    Under,
-    MatchWith,
-    OneSub,
-    Conversible (..),
-    Converting,
+    -- * Combinators
+    module Ondim.MultiWalk.Combinators,
 
     -- * Data types
     GlobalConstraints,
