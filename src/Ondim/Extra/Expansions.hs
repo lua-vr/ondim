@@ -1,18 +1,19 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# HLINT ignore "Use uncurry" #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 -- | Uselful examples of expansions.
 module Ondim.Extra.Expansions where
 
 import Control.Monad.Except (MonadError (throwError), catchError, throwError)
+import Control.Monad.Writer.CPS (censor)
 import Data.Attoparsec.Text (Parser, char, string, takeTill)
-import Data.HashMap.Strict qualified as Map
+import Data.HashMap.Strict qualified as HMap
 import Data.List qualified as L
+import Data.Map qualified as Map
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Ondim
-import Relude.Extra.Map (notMember)
+import Ondim.MultiWalk.Basic (Expansions (..), SomeExpansion (..))
 import Replace.Attoparsec.Text (streamEditT)
 
 lookupAttr' ::
@@ -38,7 +39,7 @@ ignore = const $ pure []
 debug :: GlobalExpansion m
 debug node = do
   exps <- expansions <$> getOndimS
-  let go (Expansions e) = (`foldMap` Map.toList e) \(k, v) ->
+  let go (Expansions e) = (`foldMap` HMap.toList e) \(k, v) ->
         case v of
           Namespace m -> (k, "Namespace") : map (first ((k <> ".") <>)) (go m)
           SomeExpansion {} -> one (k, "SomeExpansion")
@@ -68,6 +69,73 @@ with node = do
       let expansion = lookupExpansion v exps
        in withExpansion v Nothing . withExpansion k expansion
   foldr ($) (liftChildren node) actions
+
+listExp ::
+  (a -> SomeExpansion m) ->
+  [a] ->
+  ExpansionMap m
+listExp f list = do
+  "size" #@ show $ length list
+  "list" #* listList f list
+  "nth" #* nthList f list
+  whenJust (viaNonEmpty head list) (("head" #:) . f)
+
+listList ::
+  forall a m t.
+  GlobalConstraints m t =>
+  (a -> SomeExpansion m) ->
+  [a] ->
+  Expansion m t
+listList f list node = do
+  alias <- fromMaybe "item" <$> lookupAttr "as" node
+  intercalateWith <- lookupAttr "intercalate" node
+  let inter txt
+        | Just ft <- fromText @t = intercalate (ft txt)
+        | otherwise = join
+      join' = maybe join inter intercalateWith
+  withExpansion alias Nothing $
+    join' <$> forM list \el ->
+      liftChildren node
+        `binding` do alias #: f el
+
+nthList ::
+  forall a m t.
+  GlobalConstraints m t =>
+  (a -> SomeExpansion m) ->
+  [a] ->
+  Expansion m t
+nthList f list node = do
+  n <- getSingleAttr "n" <$> attributes node
+  el <- fromMaybe (throwCustom $ err n) do
+    n' <- readMaybe . toString =<< n
+    pure <$> maybeAt n' list
+  case getSomeExpansion $ f el of
+    Just e -> e node
+    Nothing -> throwCustom (err n)
+  where
+    err n = "List index error: no such index " <> show n
+
+assocsExp ::
+  (v -> SomeExpansion m) ->
+  [(Text, v)] ->
+  ExpansionMap m
+assocsExp vf obj = do
+  "size" #@ show $ length obj
+  "list" #* listList kv obj
+  "keys" #* listList textData (map fst obj)
+  "values" #* listList vf (map snd obj)
+  forM_ obj (\(k, v) -> k #: vf v)
+  where
+    kv (k, v) =
+      namespace do
+        "key" #@ k
+        "value" #: vf v
+
+mapExp ::
+  (v -> SomeExpansion m) ->
+  Map Text v ->
+  ExpansionMap m
+mapExp vf obj = assocsExp vf (Map.toList obj)
 
 ifElse ::
   forall t m.
@@ -145,7 +213,7 @@ bind :: forall t m. GlobalConstraints m t => Expansion m t
 bind node = do
   attrs <- attributes node
   whenJust (getSingleAttr "name" attrs) $ \name -> do
-    putExpansion name $ toSomeExpansion $ \inner -> do
+    putExpansion name $ someExpansion $ \inner -> do
       attrs' <- attributes inner
       liftChildren node
         `binding` do
@@ -153,8 +221,7 @@ bind node = do
           -- using `#.` would mean other stuff under the namespace is erased. We
           -- don't want that.
           "this.children" ## const (liftChildren inner)
-          forM_ attrs' \attr ->
-            "this." <> fst attr #@ snd attr
+          censor (map $ first ("this." <>)) $ assocsExp textData attrs'
   pure []
 
 {- | This expansion works like Heist's `bind` splice, but binds what's inside as
@@ -218,7 +285,7 @@ notBoundFilter validIds original nodes = do
     result =
       case identify original of
         Just name
-          | name `notMember` validIds ->
+          | name `Set.notMember` validIds ->
               ifM (isJust <$> getExpansion @t name) nodes (throwNotBound name)
         _ -> nodes
 

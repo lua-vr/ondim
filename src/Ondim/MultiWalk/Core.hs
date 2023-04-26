@@ -21,22 +21,21 @@ module Ondim.MultiWalk.Core
     Expansion,
     GlobalExpansion,
     SomeExpansion (..),
-    toSomeExpansion,
     splitExpansionKey,
     lookupExpansion,
     insertExpansion,
     deleteExpansion,
     Expansions (..),
+    getSomeExpansion,
     getExpansion,
     getTextData,
     Filter,
     GlobalFilter,
     SomeFilter (..),
-    toSomeFilter,
     Filters,
-    CanLift (..),
+    CanLift,
     modSubLift,
-    Substructure (..),
+    Substructure,
     getSubstructure,
     getSubstructure',
     modSubstructureM,
@@ -64,9 +63,6 @@ import Prelude hiding (All)
 
 -- * State data
 
-toSomeFilter :: Typeable a => Filter m a -> SomeFilter m
-toSomeFilter = SomeFilter typeRep
-
 getSomeFilter :: forall a m. GlobalConstraints m a => SomeFilter m -> Maybe (Filter m a)
 getSomeFilter (GlobalFilter v) = Just v
 getSomeFilter (SomeFilter t v)
@@ -74,9 +70,6 @@ getSomeFilter (SomeFilter t v)
   | otherwise = Nothing
   where
     rep = typeRep :: TypeRep a
-
-toSomeExpansion :: Typeable a => Expansion m a -> SomeExpansion m
-toSomeExpansion = SomeExpansion typeRep
 
 getSomeExpansion ::
   forall a m.

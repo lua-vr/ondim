@@ -27,17 +27,21 @@ module Ondim
     GlobalConstraints,
     Expansion,
     GlobalExpansion,
-    SomeExpansion (..),
-    toSomeExpansion,
-    Expansions (..),
+    SomeExpansion,
+    someExpansion,
+    globalExpansion,
+    textData,
+    namespace,
+    Expansions,
     splitExpansionKey,
     lookupExpansion,
     insertExpansion,
     deleteExpansion,
     Filter,
     GlobalFilter,
-    SomeFilter (..),
-    toSomeFilter,
+    SomeFilter,
+    someFilter,
+    globalFilter,
     Filters,
     OndimState (..),
 
@@ -61,12 +65,14 @@ module Ondim
     (#@),
     (#*),
     (#.),
+    (#:),
     binding,
     withExpansion,
     withExpansions,
     withoutExpansions,
     putExpansion,
     getExpansion,
+    getSomeExpansion,
     getTextData,
     callExpansion,
     callText,
@@ -74,6 +80,7 @@ module Ondim
     FilterMap,
     ($#),
     ($*),
+    ($:),
     bindingFilters,
     withFilter,
     withFilters,
@@ -111,6 +118,7 @@ import Data.HashMap.Strict qualified as HMap
 import Data.List qualified as L
 import Data.Map qualified as Map
 import Ondim.MultiWalk.Core
+import Type.Reflection (typeRep)
 import Prelude hiding (All)
 
 -- | Runs the Ondim action with a given initial state.
@@ -208,39 +216,68 @@ name #<> ex = tell [(name, ex)]
 unbind :: Text -> Writer [(Text, Maybe m)] ()
 unbind k = k #<> Nothing
 
+infixr 0 #:
+
+(#:) :: Text -> SomeExpansion m -> ExpansionMap m
+name #: ex = name #<> Just ex
+
+someExpansion :: Typeable t => Expansion m t -> SomeExpansion m
+someExpansion = SomeExpansion typeRep
+
 infixr 0 ##
 
 (##) :: Typeable t => Text -> Expansion m t -> ExpansionMap m
-name ## ex = name #<> Just $ toSomeExpansion ex
+name ## ex = name #: someExpansion ex
+
+textData :: Text -> SomeExpansion m
+textData = TextData
 
 infixr 0 #@
 
 (#@) :: Text -> Text -> ExpansionMap m
-name #@ ex = name #<> Just $ TextData ex
+name #@ ex = name #: TextData ex
+
+globalExpansion :: GlobalExpansion m -> SomeExpansion m
+globalExpansion = GlobalExpansion
 
 infixr 0 #*
 
 (#*) :: Text -> GlobalExpansion m -> ExpansionMap m
-name #* ex = name #<> Just $ GlobalExpansion ex
+name #* ex = name #: globalExpansion ex
+
+namespace :: ExpansionMap m -> SomeExpansion m
+namespace ex = Namespace $ foldl' go mempty exps
+  where
+    go = flip $ uncurry insertExpansion
+    exps = mapMaybe sequence $ execWriter ex
 
 infixr 0 #.
 
 (#.) :: Text -> ExpansionMap m -> ExpansionMap m
-name #. ex =
-  name #<> Just . Namespace $
-    foldl' (flip $ uncurry insertExpansion) mempty (mapMaybe sequence $ execWriter ex)
+name #. ex = name #: namespace ex
 
 type FilterMap m = Writer [(Text, Maybe (SomeFilter m))] ()
+
+infixr 0 $:
+
+($:) :: Text -> SomeFilter m -> FilterMap m
+name $: ex = name #<> Just ex
+
+someFilter :: Typeable t => Filter m t -> SomeFilter m
+someFilter = SomeFilter typeRep
 
 infixr 0 $#
 
 ($#) :: Typeable t => Text -> Filter m t -> FilterMap m
-name $# ex = name #<> Just $ toSomeFilter ex
+name $# ex = name $: someFilter ex
+
+globalFilter :: GlobalFilter m -> SomeFilter m
+globalFilter = GlobalFilter
 
 infixr 0 $*
 
 ($*) :: Text -> GlobalFilter m -> FilterMap m
-name $* ex = name #<> Just $ GlobalFilter ex
+name $* ex = name $: globalFilter ex
 
 -- | Infix version of @withExpansions@ to bind using MapSyntax.
 binding ::

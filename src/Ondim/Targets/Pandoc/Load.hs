@@ -26,9 +26,9 @@ loadTemplatesDynamic =
   where
     patts = [(InlineTpl, "**/*.inl.md"), (BlockTpl, "**/*.blk.md")]
     ins InlineTpl name (loadPandoc inlineFromDocument -> tpl) s =
-      s {expansions = insertExpansion name (toSomeExpansion tpl) (expansions s)}
+      s {expansions = insertExpansion name (someExpansion tpl) (expansions s)}
     ins BlockTpl name (loadPandoc blockFromDocument -> tpl) s =
-      s {expansions = insertExpansion name (toSomeExpansion tpl) (expansions s)}
+      s {expansions = insertExpansion name (someExpansion tpl) (expansions s)}
     loadPandoc f txt =
       either
         (throw . TemplateLoadingException . toString . renderError)

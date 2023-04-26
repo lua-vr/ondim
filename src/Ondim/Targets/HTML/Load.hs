@@ -23,7 +23,7 @@ loadTemplatesDynamic =
               (throw . TemplateLoadingException)
               fromDocument
               (X.parseHTML (toString name) text)
-       in s {expansions = insertExpansion name (toSomeExpansion template) (expansions s)}
+       in s {expansions = insertExpansion name (someExpansion template) (expansions s)}
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimState n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
