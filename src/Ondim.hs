@@ -100,11 +100,15 @@ module Ondim
 where
 
 import Control.Monad.Writer.CPS
-import Control.MultiWalk.HasSub (AllMods, GSubTag, SelSpec (..), SubSpec (..))
+import Control.MultiWalk.HasSub (AllMods)
 import Data.HashMap.Strict qualified as HMap
 import Data.List qualified as L
 import Data.Map qualified as Map
+import Ondim.MultiWalk.Basic
+import Ondim.MultiWalk.Class
+import Ondim.MultiWalk.Combinators
 import Ondim.MultiWalk.Core
+import Ondim.MultiWalk.Substructure
 import Type.Reflection (typeRep)
 import Prelude hiding (All)
 
@@ -339,3 +343,11 @@ callText :: forall m. Monad m => Text -> Ondim m Text
 callText name = do
   exps <- getTextData name
   maybe (throwNotBound name) pure exps
+-- * Attributes
+
+instance OndimNode Text where
+  type ExpTypes Text = '[]
+
+instance OndimNode Attribute where
+  type ExpTypes Attribute = '[ToSpec (OneSub Text)]
+  identify = Just . fst

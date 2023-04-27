@@ -19,6 +19,8 @@ where
 import Control.MultiWalk.HasSub (GSubTag, SelSpec, SubSpec (..))
 import Control.MultiWalk.HasSub qualified as HS
 import Ondim.MultiWalk.Basic
+import Ondim.MultiWalk.Core
+import Ondim.MultiWalk.Substructure
 
 type family CombinatorCarrier (b :: Type) :: Type where
   CombinatorCarrier (Under b s a) = b

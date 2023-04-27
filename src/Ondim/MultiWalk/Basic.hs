@@ -8,9 +8,9 @@
 module Ondim.MultiWalk.Basic where
 
 import Control.Monad.Except (MonadError)
-import Control.MultiWalk.HasSub (AllMods, GSubTag, SelSpec, SubSpec (..))
 import Control.MultiWalk.HasSub qualified as HS
 import Data.HashMap.Strict qualified as Map
+import {-# SOURCE #-} Ondim.MultiWalk.Class
 import Type.Reflection (TypeRep)
 
 -- * Monad
@@ -34,7 +34,7 @@ instance MonadReader s m => MonadReader s (Ondim m) where
 
 -- * Filters and Expansions
 
-type GlobalConstraints m t = (OndimNode t, Monad m)
+type GlobalConstraints m t = (OndimNode t, Typeable t, Monad m)
 
 -- Filters
 
@@ -101,24 +101,6 @@ data OndimException
   | CustomException Text [Text]
   deriving (Show)
 
--- * Class
-
-class
-  ( HasSub GSubTag (ExpTypes t) t,
-    AllMods CanLift (ExpTypes t),
-    AllMods (Substructure t) (ExpTypes t),
-    Typeable t
-  ) =>
-  OndimNode t
-  where
-  type ExpTypes t :: [SubSpec]
-  identify :: t -> Maybe Text
-  identify _ = Nothing
-  fromText :: Maybe (Text -> [t])
-  fromText = Nothing
-  attributes :: Monad m => t -> Ondim m [Attribute]
-  attributes _ = pure []
-
 -- * Combinators
 
 data OCTag
@@ -127,81 +109,6 @@ type HasSub tag ls t = HS.HasSub OCTag tag ls t
 type Carrier a = HS.Carrier OCTag a
 type ToSpec a = HS.ToSpec OCTag a
 type ToSpecSel s a = HS.ToSpecSel OCTag s a
-
--- Classes
-
-class CanLift (s :: Type) where
-  liftSub ::
-    Monad m =>
-    Carrier s ->
-    Ondim m (Carrier s)
-
-class Substructure (a :: Type) (s :: Type) where
-  getSubs :: Carrier s -> [a]
-  modSubs :: Applicative m => ([a] -> m [a]) -> Carrier s -> m (Carrier s)
-
-instance {-# OVERLAPPABLE #-} Substructure a s where
-  getSubs = mempty
-  modSubs = const pure
-
-instance (Carrier a ~ [a]) => Substructure a a where
-  getSubs = id
-  modSubs = id
-
--- * Lifting functions
-
-modSubLift ::
-  forall ls m t.
-  ( Monad m,
-    HasSub GSubTag ls t,
-    AllMods CanLift ls
-  ) =>
-  t ->
-  Ondim m t
-modSubLift = HS.modSub @OCTag @GSubTag @ls @t (Proxy @CanLift) (\(_ :: Proxy s) -> liftSub @s)
-{-# INLINEABLE modSubLift #-}
-
--- * Structure functions
-
-getSubstructure' ::
-  forall a ls t.
-  ( HasSub GSubTag ls t,
-    AllMods (Substructure a) ls
-  ) =>
-  t ->
-  [a]
-getSubstructure' = HS.getSub @OCTag @GSubTag @ls @t (Proxy @(Substructure a)) (\(_ :: Proxy j) -> getSubs @a @j)
-
-getSubstructure ::
-  forall a t.
-  ( OndimNode t,
-    AllMods (Substructure a) (ExpTypes t)
-  ) =>
-  t ->
-  [a]
-getSubstructure = getSubstructure' @a @(ExpTypes t)
-
-modSubstructureM' ::
-  forall a ls t m.
-  ( HasSub GSubTag ls t,
-    AllMods (Substructure a) ls,
-    Applicative m
-  ) =>
-  ([a] -> m [a]) ->
-  t ->
-  m t
-modSubstructureM' f = HS.modSub @OCTag @GSubTag @ls @t (Proxy @(Substructure a)) (\(_ :: Proxy j) -> modSubs @a @j f)
-
-modSubstructureM ::
-  forall a t m.
-  ( OndimNode t,
-    AllMods (Substructure a) (ExpTypes t),
-    Applicative m
-  ) =>
-  ([a] -> m [a]) ->
-  t ->
-  m t
-modSubstructureM = modSubstructureM' @a @(ExpTypes t)
 
 -- * Attributes
 

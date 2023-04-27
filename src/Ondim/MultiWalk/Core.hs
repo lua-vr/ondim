@@ -4,63 +4,29 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
-module Ondim.MultiWalk.Core
-  ( Ondim (..),
-    OndimNode (..),
-    liftNode,
-    liftNodes,
-    liftSubstructures,
-    OndimState (..),
-    initialGS,
-    OndimException (..),
-    throwNotBound,
-    throwCustom,
-    GlobalConstraints,
-    Expansion,
-    GlobalExpansion,
-    SomeExpansion (..),
-    splitExpansionKey,
-    lookupExpansion,
-    insertExpansion,
-    deleteExpansion,
-    Expansions (..),
-    getSomeExpansion,
-    getExpansion,
-    getTextData,
-    Filter,
-    GlobalFilter,
-    SomeFilter (..),
-    Filters,
-    CanLift,
-    modSubLift,
-    Substructure,
-    getSubstructure,
-    getSubstructure',
-    modSubstructureM,
-    modSubstructureM',
-    Attribute,
-    Under,
-    MatchWith,
-    Conversible (..),
-    Converting,
-    Trav,
-    OneSub,
-    HasSub,
-    ToSpec,
-    ToSpecSel,
-  )
-where
+module Ondim.MultiWalk.Core where
 
-import Control.Monad.Except (MonadError (..))
+import Control.MultiWalk.HasSub (AllMods, GSubTag)
+import Control.MultiWalk.HasSub qualified as HS
 import Data.Char (isLetter)
 import Data.HashMap.Strict qualified as Map
 import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
-import Ondim.MultiWalk.Combinators
+import Ondim.MultiWalk.Class
 import Type.Reflection (TypeRep, eqTypeRep, typeRep, type (:~~:) (HRefl))
 import Prelude hiding (All)
+
+-- * CanLift class
+
+class CanLift (s :: Type) where
+  liftSub ::
+    Monad m =>
+    Carrier s ->
+    Ondim m (Carrier s)
+
+instance {-# OVERLAPPABLE #-} (Carrier a ~ [a], OndimNode a) => CanLift a where
+  liftSub = liftNodes
 
 -- * State data
 
@@ -194,42 +160,15 @@ liftSubstructures :: forall m t. (Monad m, OndimNode t) => t -> Ondim m t
 liftSubstructures = modSubLift @(ExpTypes t)
 {-# INLINEABLE liftSubstructures #-}
 
-instance {-# OVERLAPPABLE #-} (Carrier a ~ [a], OndimNode a) => CanLift a where
-  liftSub = liftNodes
+-- * Lifting functions
 
--- * Expansion context
-
-withDebugCtx ::
-  forall m a.
-  Monad m =>
-  (Int -> Int) ->
-  ([Text] -> [Text]) ->
-  Ondim m a ->
-  Ondim m a
-withDebugCtx f g =
-  Ondim
-    . local
-      ( \gs ->
-          gs
-            { expansionDepth = f (expansionDepth gs),
-              expansionTrace = g (expansionTrace gs)
-            }
-      )
-    . unOndimT
-
-expCtx :: forall m a. Monad m => Text -> Ondim m a -> Ondim m a
-expCtx name ctx = do
-  gst <- Ondim ask
-  if expansionDepth gst >= 200
-    then -- To avoid recursive expansions
-      throwError (MaxExpansionDepthExceeded $ expansionTrace gst)
-    else withDebugCtx (+ 1) (name :) ctx
-
--- * Attributes
-
-instance OndimNode Text where
-  type ExpTypes Text = '[]
-
-instance OndimNode Attribute where
-  type ExpTypes Attribute = '[ToSpec (OneSub Text)]
-  identify = Just . fst
+modSubLift ::
+  forall ls m t.
+  ( Monad m,
+    HasSub GSubTag ls t,
+    AllMods CanLift ls
+  ) =>
+  t ->
+  Ondim m t
+modSubLift = HS.modSub @OCTag @GSubTag @ls @t (Proxy @CanLift) (\(_ :: Proxy s) -> liftSub @s)
+{-# INLINEABLE modSubLift #-}
