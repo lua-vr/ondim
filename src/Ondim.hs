@@ -1,4 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 {- | This module defines a user-friendly API over the core functionality
  (implemented in Ondim.MultiWalk.Core).
@@ -16,8 +18,11 @@ module Ondim
     GlobalExpansion,
     SomeExpansion,
     someExpansion,
+    someExpansion',
     globalExpansion,
+    globalExpansion',
     textData,
+    textData',
     namespace,
     Expansions,
     splitExpansionKey,
@@ -39,9 +44,15 @@ module Ondim
     evalOndimT,
 
     -- * Exceptions
+    ExceptionType (..),
     OndimException (..),
+    throwTemplateError,
     throwNotBound,
-    throwCustom,
+    catchOndim,
+    DefinitionSite (..),
+    getCurrentSite,
+    callStackSite,
+    withSite,
 
     -- * State transformations
 
@@ -121,7 +132,7 @@ evalOndimTWith ::
 evalOndimTWith s o =
   runExceptT $
     unOndimT o
-      `runReaderT` initialGS
+      `runReaderT` initialTraceData
       `evalStateT` s
 
 runOndimTWith ::
@@ -132,7 +143,7 @@ runOndimTWith ::
 runOndimTWith s o =
   runExceptT $
     unOndimT o
-      `runReaderT` initialGS
+      `runReaderT` initialTraceData
       `runStateT` s
 
 -- | Runs the Ondim action with empty initial state.
@@ -213,27 +224,36 @@ infixr 0 #:
 name #: ex = name #<> Just ex
 
 someExpansion :: Typeable t => Expansion m t -> SomeExpansion m
-someExpansion = SomeExpansion typeRep
+someExpansion = SomeExpansion typeRep callStackSite
+
+someExpansion' :: Typeable t => DefinitionSite -> Expansion m t -> SomeExpansion m
+someExpansion' = SomeExpansion typeRep
 
 infixr 0 ##
 
-(##) :: Typeable t => Text -> Expansion m t -> ExpansionMap m
+(##) :: (HasCallStack, Typeable t) => Text -> Expansion m t -> ExpansionMap m
 name ## ex = name #: someExpansion ex
 
 textData :: Text -> SomeExpansion m
-textData = TextData
+textData = TextData callStackSite
+
+textData' :: DefinitionSite -> Text -> SomeExpansion m
+textData' = TextData
 
 infixr 0 #@
 
-(#@) :: Text -> Text -> ExpansionMap m
-name #@ ex = name #: TextData ex
+(#@) :: HasCallStack => Text -> Text -> ExpansionMap m
+name #@ ex = name #: TextData callStackSite ex
 
 globalExpansion :: GlobalExpansion m -> SomeExpansion m
-globalExpansion = GlobalExpansion
+globalExpansion = GlobalExpansion callStackSite
+
+globalExpansion' :: DefinitionSite -> GlobalExpansion m -> SomeExpansion m
+globalExpansion' = GlobalExpansion
 
 infixr 0 #*
 
-(#*) :: Text -> GlobalExpansion m -> ExpansionMap m
+(#*) :: HasCallStack => Text -> GlobalExpansion m -> ExpansionMap m
 name #* ex = name #: globalExpansion ex
 
 namespace :: ExpansionMap m -> SomeExpansion m
@@ -326,23 +346,28 @@ fromTemplate ::
   ( OndimNode t,
     Monad m
   ) =>
+  DefinitionSite ->
   [t] ->
-  Expansion m t
-fromTemplate tpl inner =
-  liftNodes tpl `binding` do
-    "this.children" ## const (liftChildren inner)
+  SomeExpansion m
+fromTemplate fileSite tpl =
+  someExpansion' fileSite \inner -> do
+    site <- getCurrentSite
+    withSite fileSite $
+      liftNodes tpl `binding` do
+        "this.children" ## const (withSite site $ liftChildren inner)
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
 callExpansion :: forall t m. GlobalConstraints m t => Text -> Expansion m t
 callExpansion name arg = do
   exps <- getExpansion name
-  maybe (throwNotBound name) ($ arg) exps
+  maybe (throwNotBound @t name) ($ arg) exps
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
 callText :: forall m. Monad m => Text -> Ondim m Text
 callText name = do
   exps <- getTextData name
-  maybe (throwNotBound name) pure exps
+  maybe (throwNotBound @Text name) pure exps
+
 -- * Attributes
 
 instance OndimNode Text where

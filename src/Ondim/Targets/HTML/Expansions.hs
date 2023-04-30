@@ -1,6 +1,8 @@
 module Ondim.Targets.HTML.Expansions where
 
+import Data.Set qualified as Set
 import Ondim
+import Ondim.Extra.Exceptions (mbAttrFilter, notBoundFilter)
 import Ondim.Extra.Expansions
 import Ondim.Targets.HTML.Instances
 
@@ -21,12 +23,11 @@ bindDefaults st =
         "bind-text" ## bindText nodeText
         "with" #* with
         "open" #* open
-        "debug" #* debug
       "@try" ## const $ pure ([] :: [Attribute])
     `bindingFilters` do
       "attrSub" $# attrSub
       "mbAttr" $# mbAttrFilter
-      "notBound" $# notBoundFilter @HtmlNode validHtmlTags
+      "notBound" $# notBoundFilter @HtmlNode (`Set.member` validHtmlTags)
 
 -- * Valid html tags
 

@@ -25,28 +25,21 @@ loadTemplatesDynamic =
   loadTemplatesDynamic' patts ins
   where
     patts = [(InlineTpl, "**/*.inl.md"), (BlockTpl, "**/*.blk.md")]
-    ins InlineTpl name (loadPandoc inlineFromDocument -> tpl) s =
-      s {expansions = insertExpansion name (someExpansion tpl) (expansions s)}
-    ins BlockTpl name (loadPandoc blockFromDocument -> tpl) s =
-      s {expansions = insertExpansion name (someExpansion tpl) (expansions s)}
-    loadPandoc f txt =
+    ins t fp txt =
       either
         (throw . TemplateLoadingException . toString . renderError)
-        f
-        ( runPure $
-            readMarkdown
-              def {readerExtensions = pandocExtensions}
-              (decodeUtf8 txt :: Text)
-        )
+        (fromDocument t (FileDefinition fp))
+        $ runPure
+        $ readMarkdown
+          def {readerExtensions = pandocExtensions}
+          (decodeUtf8 txt :: Text)
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimState n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
 
 -- Template loading helpers
 
-blockFromDocument :: Monad m => Pandoc -> Expansion m Block
-blockFromDocument (Pandoc _ b) = fromTemplate b
-
-inlineFromDocument :: Monad m => Pandoc -> Expansion m Inline
-inlineFromDocument (Pandoc _ (Para i : _)) = fromTemplate i
-inlineFromDocument _ = ignore
+fromDocument :: Monad m => TemplateType -> DefinitionSite -> Pandoc -> SomeExpansion m
+fromDocument BlockTpl site (Pandoc _ b) = fromTemplate site b
+fromDocument InlineTpl site (Pandoc _ (Para i : _)) = fromTemplate site i
+fromDocument InlineTpl site _ = someExpansion' @Inline site ignore

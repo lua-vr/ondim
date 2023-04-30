@@ -4,17 +4,17 @@
 -- | Uselful examples of expansions.
 module Ondim.Extra.Expansions where
 
-import Control.Monad.Except (MonadError (throwError), catchError, throwError)
 import Control.Monad.Writer.CPS (censor)
 import Data.Attoparsec.Text (Parser, char, string, takeTill)
-import Data.HashMap.Strict qualified as HMap
 import Data.List qualified as L
 import Data.Map qualified as Map
-import Data.Set qualified as Set
-import Data.Text qualified as T
 import Ondim
-import Ondim.MultiWalk.Basic (Expansions (..), SomeExpansion (..))
+import Ondim.MultiWalk.Basic (SomeExpansion (..))
 import Replace.Attoparsec.Text (streamEditT)
+
+newtype TemplateError = TemplateError Text
+  deriving stock (Show)
+  deriving anyclass (Exception)
 
 lookupAttr' ::
   (Monad m, OndimNode t) =>
@@ -22,7 +22,7 @@ lookupAttr' ::
   t ->
   Ondim m Text
 lookupAttr' key node =
-  maybe (throwCustom $ "Missing '" <> key <> "' argument.") pure . L.lookup key
+  maybe (throwTemplateError $ "Missing '" <> key <> "' argument.") pure . L.lookup key
     =<< attributes node
 
 getSingleAttr :: Text -> [Attribute] -> Maybe Text
@@ -36,30 +36,15 @@ identifiesAs n = (Just n ==) . fmap splitExpansionKey . identify
 ignore :: forall t m. Monad m => Expansion m t
 ignore = const $ pure []
 
-debug :: GlobalExpansion m
-debug node = do
-  exps <- expansions <$> getOndimS
-  let go (Expansions e) = (`foldMap` HMap.toList e) \(k, v) ->
-        case v of
-          Namespace m -> (k, "Namespace") : map (first ((k <> ".") <>)) (go m)
-          SomeExpansion {} -> one (k, "SomeExpansion")
-          GlobalExpansion {} -> one (k, "GlobalExpansion")
-          TextData {} -> one (k, "TextData")
-      keys = go exps
-  join <$> forM keys \(key, kind) ->
-    liftChildren node `binding` do
-      "key" #@ key
-      "kind" #@ kind
-
 open :: GlobalExpansion m
 open node = do
   name' <- viaNonEmpty (fst . head) <$> attributes node
-  name <- maybe (throwCustom "Expansion name not provided.") pure name'
+  name <- maybe (throwTemplateError "Namespace not provided.") pure name'
   exps <- lookupExpansion name . expansions <$> getOndimS
   withExpansion name Nothing $
     case exps of
       Just (Namespace v) -> withExpansions v $ liftChildren node
-      _ -> throwNotBound name
+      _ -> throwTemplateError $ "The namespace " <> show name <> " is not defined."
 
 with :: GlobalExpansion m
 with node = do
@@ -76,6 +61,7 @@ listExp ::
   ExpansionMap m
 listExp f list = do
   "size" #@ show $ length list
+  "nonempty" #* ifElse (not $ null list)
   "list" #* listList f list
   "nth" #* nthList f list
   whenJust (viaNonEmpty head list) (("head" #:) . f)
@@ -106,12 +92,12 @@ nthList ::
   Expansion m t
 nthList f list node = do
   n <- getSingleAttr "n" <$> attributes node
-  el <- fromMaybe (throwCustom $ err n) do
+  el <- fromMaybe (throwTemplateError $ err n) do
     n' <- readMaybe . toString =<< n
     pure <$> maybeAt n' list
   case getSomeExpansion $ f el of
     Just e -> e node
-    Nothing -> throwCustom (err n)
+    Nothing -> throwTemplateError (err n)
   where
     err n = "List index error: no such index " <> show n
 
@@ -121,6 +107,7 @@ assocsExp ::
   ExpansionMap m
 assocsExp vf obj = do
   "size" #@ show $ length obj
+  "nonempty" #* ifElse (not $ null obj)
   "list" #* listList kv obj
   "keys" #* listList textData (map fst obj)
   "values" #* listList vf (map snd obj)
@@ -212,16 +199,21 @@ switchBound node = do
 bind :: forall t m. GlobalConstraints m t => Expansion m t
 bind node = do
   attrs <- attributes node
+  defSite <- getCurrentSite
   whenJust (getSingleAttr "name" attrs) $ \name -> do
-    putExpansion name $ someExpansion $ \inner -> do
+    putExpansion name $ someExpansion' defSite $ \inner -> do
+      callSite <- getCurrentSite
       attrs' <- attributes inner
-      liftChildren node
-        `binding` do
-          -- Note to self: writing "this.children" is intentional. rebember that
-          -- using `#.` would mean other stuff under the namespace is erased. We
-          -- don't want that.
-          "this.children" ## const (liftChildren inner)
-          censor (map $ first ("this." <>)) $ assocsExp textData attrs'
+      withSite defSite $
+        liftChildren node
+          `binding` do
+            -- Note to self: writing "this.children" is intentional. rebember that
+            -- using `#.` would mean other stuff under the namespace is erased. We
+            -- don't want that.
+            "this.children"
+              #: someExpansion' defSite
+              $ const (withSite callSite $ liftChildren inner)
+            censor (map $ first ("this.attrs." <>)) $ assocsExp (textData' defSite) attrs'
   pure []
 
 {- | This expansion works like Heist's `bind` splice, but binds what's inside as
@@ -234,8 +226,9 @@ bindText ::
 bindText toTxt self = do
   attrs <- attributes self
   child <- liftChildren self
+  site <- getCurrentSite
   whenJust (getSingleAttr "name" attrs) $ \tag -> do
-    putExpansion tag $ TextData $ foldMap toTxt child
+    putExpansion tag $ TextData site $ foldMap toTxt child
   pure []
 
 {- | This expansion creates a new scope for the its children, in the sense that
@@ -271,28 +264,3 @@ attrEdit = streamEditT interpParser callText
 
 attrSub :: Monad m => Filter m Text
 attrSub t _ = one <$> attrEdit t
-
-notBoundFilter :: forall t m. (GlobalConstraints m t) => Set Text -> Filter m t
-notBoundFilter validIds original nodes = do
-  attrs <- attributes original
-  if any (("@try" ==) . fst) attrs
-    then
-      result `catchError` \case
-        ExpansionNotBound {} -> return []
-        e -> throwError e
-    else result
-  where
-    result =
-      case identify original of
-        Just name
-          | name `Set.notMember` validIds ->
-              ifM (isJust <$> getExpansion @t name) nodes (throwNotBound name)
-        _ -> nodes
-
-mbAttrFilter :: Monad m => Filter m Attribute
-mbAttrFilter (k, _) x
-  | Just k' <- "?" `T.stripSuffix` k =
-      first (const k') <<$>> x `catchError` \case
-        ExpansionNotBound {} -> return []
-        e -> throwError e
-  | otherwise = x

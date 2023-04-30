@@ -3,6 +3,7 @@ module Ondim.Targets.Whiskers.Expansions where
 import Ondim
 import Ondim.Extra.Expansions
 import Ondim.Targets.Whiskers.Instances (Node)
+import Ondim.Extra.Exceptions (mbAttrFilter, notBoundFilter)
 
 bindDefaults ::
   forall m t.
@@ -20,10 +21,9 @@ bindDefaults st =
         "scope" #* scope
         "with" #* with
         "open" #* open
-        "debug" #* debug
       "" ## liftChildren @Node
       "@try" ## const $ pure ([] :: [Attribute])
     `bindingFilters` do
       "attrSub" $# attrSub
       "mbAttr" $# mbAttrFilter
-      "notBound" $# notBoundFilter @Node mempty
+      "notBound" $# notBoundFilter @Node (const False)

@@ -17,13 +17,11 @@ loadTemplatesDynamic d =
   loadTemplatesDynamic' patts ins
   where
     patts = [((), "**/*.w.*")]
-    ins () name text s =
-      let template =
-            either
-              (throw . TemplateLoadingException)
-              fromTemplate
-              (parseWhiskers d (toString name) $ decodeUtf8 text)
-       in s {expansions = insertExpansion name (someExpansion template) (expansions s)}
+    ins () fp text =
+      either
+        (throw . TemplateLoadingException)
+        (fromTemplate $ FileDefinition fp)
+        (parseWhiskers d fp $ decodeUtf8 text)
 
 loadTemplates :: Monad n => (Text, Text) -> [FilePath] -> IO (OndimState n)
 loadTemplates d dirs = fst <$> runNoLoggingT (loadTemplatesDynamic d dirs)

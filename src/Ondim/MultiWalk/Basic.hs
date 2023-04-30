@@ -7,19 +7,20 @@
 
 module Ondim.MultiWalk.Basic where
 
-import Control.Monad.Except (MonadError)
+import Control.Monad.Except (MonadError (..))
 import Control.MultiWalk.HasSub qualified as HS
 import Data.HashMap.Strict qualified as Map
+import GHC.Exception (SrcLoc)
+import GHC.Exts qualified as GHC
 import {-# SOURCE #-} Ondim.MultiWalk.Class
-import Type.Reflection (TypeRep)
+import Type.Reflection (SomeTypeRep, TypeRep, someTypeRep)
 
 -- * Monad
 
 newtype Ondim m a = Ondim
-  { unOndimT ::
-      ReaderT OndimGS (StateT (OndimState m) (ExceptT OndimException m)) a
+  { unOndimT :: ReaderT TraceData (StateT (OndimState m) (ExceptT OndimException m)) a
   }
-  deriving newtype (Functor, Applicative, Monad, MonadIO, MonadError OndimException)
+  deriving newtype (Functor, Applicative, Monad, MonadIO)
 
 instance MonadTrans Ondim where
   lift = Ondim . lift . lift . lift
@@ -32,9 +33,26 @@ instance MonadReader s m => MonadReader s (Ondim m) where
   ask = lift ask
   local f (Ondim (ReaderT g)) = Ondim $ ReaderT $ local f . g
 
+instance MonadError e m => MonadError e (Ondim m) where
+  throwError = lift . throwError
+  catchError (x :: Ondim m a) c =
+    let f :: TraceData -> OndimState m -> m (Either OndimException (a, OndimState m))
+        f r s =
+          let c' e = coerce (c e) r s
+           in coerce x r s `catchError` c'
+     in coerce f
+
 -- * Filters and Expansions
 
 type GlobalConstraints m t = (OndimNode t, Typeable t, Monad m)
+
+data DefinitionSite = CodeDefinition SrcLoc | FileDefinition FilePath | NoDefinition
+  deriving (Eq, Show)
+
+callStackSite :: DefinitionSite
+callStackSite = case GHC.toList callStack of
+  x : _ -> CodeDefinition (snd x)
+  [] -> NoDefinition
 
 -- Filters
 
@@ -53,9 +71,9 @@ newtype Expansions m = Expansions {getExpansions :: HashMap Text (SomeExpansion 
 type GlobalExpansion m = forall a. GlobalConstraints m a => Expansion m a
 
 data SomeExpansion m where
-  SomeExpansion :: TypeRep a -> Expansion m a -> SomeExpansion m
-  GlobalExpansion :: GlobalExpansion m -> SomeExpansion m
-  TextData :: Text -> SomeExpansion m
+  SomeExpansion :: TypeRep a -> DefinitionSite -> Expansion m a -> SomeExpansion m
+  GlobalExpansion :: DefinitionSite -> GlobalExpansion m -> SomeExpansion m
+  TextData :: DefinitionSite -> Text -> SomeExpansion m
   Namespace :: Expansions m -> SomeExpansion m
 
 instance Semigroup (Expansions m) where
@@ -86,20 +104,44 @@ instance Monoid (OndimState m) where
 instance Semigroup (OndimState m) where
   OndimState x1 y1 <> OndimState x2 y2 = OndimState (x1 <> x2) (y1 <> y2)
 
--- | Ondim's global state
-data OndimGS = OndimGS
-  { expansionDepth :: Int,
-    expansionTrace :: [Text]
-  }
-  deriving (Read, Show, Generic)
-
 -- * Exceptions
 
-data OndimException
-  = MaxExpansionDepthExceeded [Text]
-  | ExpansionNotBound Text [Text]
-  | CustomException Text [Text]
-  deriving (Show)
+-- | Data used for debugging purposes
+data TraceData = TraceData {depth :: Int, expansionTrace :: [Text], currentSite :: DefinitionSite}
+  deriving (Eq, Show)
+
+initialTraceData :: TraceData
+initialTraceData = TraceData 0 [] NoDefinition
+
+getCurrentSite :: Monad m => Ondim m DefinitionSite
+getCurrentSite = Ondim $ asks currentSite
+
+withSite :: Monad m => DefinitionSite -> Ondim m a -> Ondim m a
+withSite site = Ondim . local (\s -> s {currentSite = site}) . unOndimT
+
+data ExceptionType
+  = MaxExpansionDepthExceeded
+  | TemplateError CallStack Text
+  | ExpansionNotBound SomeTypeRep Text
+  deriving (Show, Exception)
+
+data OndimException = OndimException ExceptionType TraceData
+  deriving (Show, Exception)
+
+throwOndim :: Monad m => ExceptionType -> Ondim m a
+throwOndim e = do
+  td <- Ondim ask
+  Ondim $ throwError (OndimException e td)
+
+catchOndim :: Monad m => Ondim m a -> (OndimException -> Ondim m (Maybe a)) -> Ondim m a
+catchOndim (Ondim m) c = Ondim $ catchError m \e ->
+  maybe (throwError e) pure =<< unOndimT (c e)
+
+throwTemplateError :: (HasCallStack, Monad m) => Text -> Ondim m a
+throwTemplateError t = throwOndim (TemplateError callStack t)
+
+throwNotBound :: forall t m a. (Monad m, Typeable t) => Text -> Ondim m a
+throwNotBound t = throwOndim $ ExpansionNotBound (someTypeRep (Proxy @t)) t
 
 -- * Combinators
 

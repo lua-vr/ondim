@@ -19,7 +19,7 @@ loadTemplatesDynamic' ::
   -- | Patterns to look for.
   [(tplTypes, FilePattern)] ->
   -- | Insertion
-  (tplTypes -> Text -> ByteString -> OndimState n -> OndimState n) ->
+  (tplTypes -> FilePath -> ByteString -> SomeExpansion n) ->
   -- | Places to look for templates, in descending order of priority.
   [FilePath] ->
   m (OndimState n, (OndimState n -> m ()) -> m ())
@@ -33,14 +33,11 @@ loadTemplatesDynamic' patts ins places =
         appEndo . mconcat . coerce . join
           <$> forM (toPairs chg) \(tplType, chg') ->
             forM (toPairs chg') \(file, fa) ->
-              let name =
-                    toText $
-                      intercalate ":" $
-                        splitDirectories $
-                          dropExtensions file
+              let name = toText $ intercalate "." $ splitDirectories $ dropExtensions file
                in case fa of
                     Refresh _ ls ->
                       let dir = snd $ minimumOn1 fst (fst <$> ls)
-                       in ins tplType name <$> readFileBS (dir </> file)
+                          fp = dir </> file
+                       in readFileBS fp <&> \b s -> s {expansions = insertExpansion name (ins tplType fp b) (expansions s)}
                     Delete -> pure \s -> s {expansions = deleteExpansion name (expansions s)}
    in unionMount sources patterns exclude initial handler

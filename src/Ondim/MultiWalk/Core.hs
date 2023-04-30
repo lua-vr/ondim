@@ -28,7 +28,7 @@ class CanLift (s :: Type) where
 instance {-# OVERLAPPABLE #-} (Carrier a ~ [a], OndimNode a) => CanLift a where
   liftSub = liftNodes
 
--- * State data
+-- * Expansion state manipulation
 
 getSomeFilter :: forall a m. GlobalConstraints m a => SomeFilter m -> Maybe (Filter m a)
 getSomeFilter (GlobalFilter v) = Just v
@@ -43,11 +43,11 @@ getSomeExpansion ::
   GlobalConstraints m a =>
   SomeExpansion m ->
   Maybe (Expansion m a)
-getSomeExpansion (TextData t)
+getSomeExpansion (TextData _ t)
   | Just f <- fromText = Just (const $ pure $ f t)
   | otherwise = Nothing
-getSomeExpansion (GlobalExpansion e) = Just e
-getSomeExpansion (SomeExpansion t v)
+getSomeExpansion (GlobalExpansion _ e) = Just e
+getSomeExpansion (SomeExpansion t _ v)
   | Just HRefl <- t `eqTypeRep` typeRep @a = Just v
   | otherwise = Nothing
 getSomeExpansion Namespace {} = Nothing
@@ -84,34 +84,13 @@ deleteExpansion (splitExpansionKey -> keys) (Expansions es) = Expansions $ go ke
       Just (Namespace (Expansions n)) -> Just $ Namespace $ Expansions $ go ks n
       _ -> Nothing
 
-initialGS :: OndimGS
-initialGS = OndimGS 0 []
-
--- * Exceptions
-
-throwNotBound ::
-  Monad m =>
-  Text ->
-  Ondim m s
-throwNotBound name =
-  throwError . ExpansionNotBound name
-    =<< Ondim (asks expansionTrace)
-
-throwCustom ::
-  Monad m =>
-  Text ->
-  Ondim m s
-throwCustom name =
-  throwError . CustomException name
-    =<< Ondim (asks expansionTrace)
-
 -- * Lifiting
 
 getTextData :: Monad m => Text -> Ondim m (Maybe Text)
 getTextData name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
   return do
-    TextData text <- mbValue
+    TextData _ text <- mbValue
     return text
 
 getExpansion ::
@@ -121,9 +100,7 @@ getExpansion ::
   Ondim m (Maybe (Expansion m t))
 getExpansion name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
-  return do
-    expansion <- getSomeExpansion =<< mbValue
-    Just (expCtx name . expansion)
+  return $ (expCtx name .) <$> (getSomeExpansion =<< mbValue)
 {-# INLINEABLE getExpansion #-}
 
 {- | This function recursively lifts the nodes into an unvaluated state, that will
@@ -144,7 +121,7 @@ liftNode node = do
     expand name =
       getExpansion name >>= \case
         Just expansion -> expansion node
-        Nothing -> withDebugCtx id (name :) $ one <$> liftSubstructures node
+        Nothing -> one <$> liftSubstructures node
 {-# INLINEABLE liftNode #-}
 
 -- | Lift a list of nodes, applying filters.
@@ -172,3 +149,12 @@ modSubLift ::
   Ondim m t
 modSubLift = HS.modSub @OCTag @GSubTag @ls @t (Proxy @CanLift) (\(_ :: Proxy s) -> liftSub @s)
 {-# INLINEABLE modSubLift #-}
+
+expCtx :: forall m a. Monad m => Text -> Ondim m a -> Ondim m a
+expCtx name (Ondim ctx) = do
+  gst <- Ondim ask
+  if depth gst >= 200
+    then -- To avoid recursive expansions
+      throwOndim MaxExpansionDepthExceeded
+    else
+      Ondim $ local (\s -> s { depth = depth s + 1, expansionTrace = name : expansionTrace s }) ctx

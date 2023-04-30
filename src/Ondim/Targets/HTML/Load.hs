@@ -17,18 +17,16 @@ loadTemplatesDynamic =
   loadTemplatesDynamic' patts ins
   where
     patts = [((), "**/*.tpl")]
-    ins () name text s =
-      let template =
-            either
-              (throw . TemplateLoadingException)
-              fromDocument
-              (X.parseHTML (toString name) text)
-       in s {expansions = insertExpansion name (someExpansion template) (expansions s)}
+    ins () fp text =
+      either
+        (throw . TemplateLoadingException)
+        (fromDocument $ FileDefinition fp)
+        (X.parseHTML fp text)
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimState n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
 
 -- * Template loading helpers
 
-fromDocument :: Monad m => X.Document -> Expansion m HtmlNode
-fromDocument = fromTemplate . fromNodeList . X.docContent
+fromDocument :: Monad m => DefinitionSite -> X.Document -> SomeExpansion m
+fromDocument site = fromTemplate site . fromNodeList . X.docContent
