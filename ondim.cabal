@@ -58,12 +58,12 @@ library
 
   build-depends:
     , attoparsec
-    , base                  >=4.14 && <5
+    , base                  >=4.14  && <5
     , containers
     , filepath
     , filepattern
     , monad-logger
-    , mtl                   >=2.3
+    , mtl                   >=2.3.1
     , multiwalk
     , relude
     , replace-attoparsec
