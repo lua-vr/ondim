@@ -3,13 +3,6 @@ module Ondim.Targets.Pandoc.Expansions where
 import Data.Text qualified as T
 import Ondim
 import Ondim.Extra.Expansions
-  ( attrSub,
-    bind,
-    bindText,
-    ifBound,
-    scope,
-    switchBound,
-  )
 import Ondim.Targets.Pandoc.Instances ()
 import Text.Pandoc.Definition
 import Text.Pandoc.Walk
@@ -23,6 +16,7 @@ bindDefaults st =
   st
     `binding` do
       "if" #* ifBound
+      "any" #* anyBound
       "switch" #* switchBound
       "bind" #* bind
       "scope" #* scope

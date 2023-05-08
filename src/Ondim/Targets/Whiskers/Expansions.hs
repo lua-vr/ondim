@@ -1,9 +1,9 @@
 module Ondim.Targets.Whiskers.Expansions where
 
 import Ondim
+import Ondim.Extra.Exceptions (mbAttrFilter, notBoundFilter)
 import Ondim.Extra.Expansions
 import Ondim.Targets.Whiskers.Instances (Node)
-import Ondim.Extra.Exceptions (mbAttrFilter, notBoundFilter)
 
 bindDefaults ::
   forall m t.
@@ -16,6 +16,7 @@ bindDefaults st =
       "o" #. do
         "ignore" #* ignore
         "if" #* ifBound
+        "any" #* anyBound
         "match" #* switchBound
         "bind" #* bind
         "scope" #* scope

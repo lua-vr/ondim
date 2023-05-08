@@ -17,6 +17,7 @@ bindDefaults st =
       "o" #. do
         "ignore" #* ignore
         "if" #* ifBound
+        "any" #* anyBound
         "match" #* switchBound
         "bind" #* bind
         "scope" #* scope

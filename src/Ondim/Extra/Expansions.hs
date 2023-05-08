@@ -180,11 +180,19 @@ switchWithDefault tag node = do
 
 ifBound :: forall t m. GlobalConstraints m t => Expansion m t
 ifBound node = do
-  attrs <- attributes node
-  bound <- case getSingleAttr "exp" attrs of
-    Just tag -> isJust <$> getExpansion @t tag
-    Nothing -> pure False
+  attrs <- snd <<$>> attributes node
+  bound <- allM exists attrs
   ifElse bound node
+  where
+    exists n = isJust . lookupExpansion n . expansions <$> getOndimS
+
+anyBound :: forall t m. GlobalConstraints m t => Expansion m t
+anyBound node = do
+  attrs <- snd <<$>> attributes node
+  bound <- anyM exists attrs
+  ifElse bound node
+  where
+    exists n = isJust . lookupExpansion n . expansions <$> getOndimS
 
 switchBound :: forall t m. GlobalConstraints m t => Expansion m t
 switchBound node = do
