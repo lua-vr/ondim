@@ -56,6 +56,7 @@ with node = do
   foldr ($) (liftChildren node) actions
 
 listExp ::
+  Monad m =>
   (a -> SomeExpansion m) ->
   [a] ->
   ExpansionMap m
@@ -102,6 +103,7 @@ nthList f list node = do
     err n = "List index error: no such index " <> show n
 
 assocsExp ::
+  Monad m =>
   (v -> SomeExpansion m) ->
   [(Text, v)] ->
   ExpansionMap m
@@ -119,6 +121,7 @@ assocsExp vf obj = do
         "value" #: vf v
 
 mapExp ::
+  Monad m =>
   (v -> SomeExpansion m) ->
   Map Text v ->
   ExpansionMap m
@@ -221,7 +224,8 @@ bind node = do
             "this.children"
               #: someExpansion' defSite
               $ const (withSite callSite $ liftChildren inner)
-            censor (map $ first ("this.attrs." <>)) $ assocsExp (textData' defSite) attrs'
+            censor (map $ first ("this.attrs." <>)) $
+              assocsExp (textMData' defSite . pure) attrs'
   pure []
 
 {- | This expansion works like Heist's `bind` splice, but binds what's inside as
@@ -233,10 +237,11 @@ bindText ::
   Expansion m t
 bindText toTxt self = do
   attrs <- attributes self
-  child <- liftChildren self
-  site <- getCurrentSite
-  whenJust (getSingleAttr "name" attrs) $ \tag -> do
-    putExpansion tag $ TextData site $ foldMap toTxt child
+  defSite <- getCurrentSite
+  whenJust (getSingleAttr "name" attrs) $ \name -> do
+    putExpansion name $ textMData' defSite $ do
+      child <- liftChildren self
+      return $ foldMap toTxt child
   pure []
 
 {- | This expansion creates a new scope for the its children, in the sense that

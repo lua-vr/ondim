@@ -14,7 +14,7 @@ import Data.Scientific
 import Ondim
 import Ondim.Extra.Expansions (listExp, assocsExp)
 
-valueExp :: Value -> SomeExpansion m
+valueExp :: Monad m => Value -> SomeExpansion m
 valueExp = \case
   Object o -> namespace $ objectExp o
   Array a -> namespace $ arrayExp a
@@ -24,10 +24,11 @@ valueExp = \case
   Bool False -> textData "false"
   Null -> textData "null"
 
-arrayExp :: Array -> ExpansionMap m
+arrayExp :: Monad m => Array -> ExpansionMap m
 arrayExp arr = listExp valueExp (toList arr)
 
 objectExp ::
+  Monad m =>
   Object ->
   ExpansionMap m
 objectExp obj = assocsExp valueExp (map (first K.toText) $ KM.toList obj)

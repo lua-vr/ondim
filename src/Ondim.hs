@@ -22,7 +22,8 @@ module Ondim
     globalExpansion,
     globalExpansion',
     textData,
-    textData',
+    textMData,
+    textMData',
     namespace,
     Expansions,
     splitExpansionKey,
@@ -61,6 +62,7 @@ module Ondim
     ExpansionMap,
     (##),
     (#@),
+    (#@@),
     (#*),
     (#.),
     (#:),
@@ -234,16 +236,22 @@ infixr 0 ##
 (##) :: (HasCallStack, Typeable t) => Text -> Expansion m t -> ExpansionMap m
 name ## ex = name #: someExpansion ex
 
-textData :: Text -> SomeExpansion m
-textData = TextData callStackSite
+textMData :: Ondim m Text -> SomeExpansion m
+textMData = TextData callStackSite
 
-textData' :: DefinitionSite -> Text -> SomeExpansion m
-textData' = TextData
+textMData' :: DefinitionSite -> Ondim m Text -> SomeExpansion m
+textMData' = TextData
+
+textData :: Monad m => Text -> SomeExpansion m
+textData = textMData . pure
 
 infixr 0 #@
 
-(#@) :: HasCallStack => Text -> Text -> ExpansionMap m
-name #@ ex = name #: TextData callStackSite ex
+(#@) :: (HasCallStack, Monad m) => Text -> Text -> ExpansionMap m
+name #@ ex = name #: TextData callStackSite (pure ex)
+
+(#@@) :: (HasCallStack, Monad m) => Text -> Ondim m Text -> ExpansionMap m
+name #@@ ex = name #: TextData callStackSite ex
 
 globalExpansion :: GlobalExpansion m -> SomeExpansion m
 globalExpansion = GlobalExpansion callStackSite

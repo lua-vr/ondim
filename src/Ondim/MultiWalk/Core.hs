@@ -44,7 +44,7 @@ getSomeExpansion ::
   SomeExpansion m ->
   Maybe (Expansion m a)
 getSomeExpansion (TextData _ t)
-  | Just f <- fromText = Just (const $ pure $ f t)
+  | Just f <- fromText = Just (const $ f <$> t)
   | otherwise = Nothing
 getSomeExpansion (GlobalExpansion _ e) = Just e
 getSomeExpansion (SomeExpansion t _ v)
@@ -89,9 +89,9 @@ deleteExpansion (splitExpansionKey -> keys) (Expansions es) = Expansions $ go ke
 getTextData :: Monad m => Text -> Ondim m (Maybe Text)
 getTextData name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
-  return do
-    TextData _ text <- mbValue
-    return text
+  case mbValue of
+    Just (TextData _ text) -> Just <$> text
+    _ -> return Nothing
 
 getExpansion ::
   forall t m.
