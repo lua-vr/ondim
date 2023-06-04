@@ -31,11 +31,12 @@ data ParserState = ParserState
   { delimiters :: (Text, Text),
     whitespace :: Text,
     bolspace :: Text,
-    alone :: Bool
+    alone :: Bool,
+    level :: Int
   }
 
 initialParserstate :: ParserState
-initialParserstate = ParserState ("<<", ">>") "" "" True
+initialParserstate = ParserState ("<<", ">>") "" "" True 0
 
 type Parser = StateT ParserState (Parsec Void Text)
 
@@ -53,16 +54,20 @@ bolspace' = do
   ws <- hwhitespace
   modify \s -> s {bolspace = ws, alone = True}
 
+trimmedBOL :: Parser Text
+trimmedBOL = gets \s -> T.drop (2 * level s) (bolspace s)
+
 newline' :: Parser ()
 newline' = do
   _ <- newline
-  modify \s -> s {whitespace = whitespace s <> "\n" <> bolspace s}
+  bol <- trimmedBOL
+  modify \s -> s {whitespace = whitespace s <> "\n" <> bol}
   bolspace'
 
 openDelimiter :: Parser (Text, Text)
 openDelimiter = do
   _ <- string =<< gets (fst . delimiters)
-  (ws, bolws) <- (char '~' $> mempty) <|> gets (whitespace &&& bolspace)
+  (ws, bolws) <- (char '~' $> mempty) <|> liftA2 (,) (gets whitespace) trimmedBOL
   modify \s -> s {whitespace = "", bolspace = ""}
   return (ws, bolws)
 
@@ -112,14 +117,14 @@ rawText = do
       notFollowedBy openDelimiter
       liftA2 T.cons (satisfy (not . isSpace)) $
         takeWhileP Nothing (\c -> not (isSymbol c || isSpace c))
-  ws <- liftA2 (<>) (gets whitespace) (gets bolspace)
+  ws <- liftA2 (<>) (gets whitespace) trimmedBOL
   modify \s -> s {whitespace = "", bolspace = "", alone = False}
   return $ one $ Textual (ws <> txt)
 
 sectionStart :: Parser Nodes
 sectionStart = do
   (ws, bolws) <- try $ openDelimiter <* notFollowedBy (char '/')
-  alone' <- gets alone
+  (alone', level') <- gets (alone &&& level)
   space
   isSection <- parseBool $ char '#'
   name <- takeWhileP (Just "node name") isAllowedName
@@ -128,8 +133,9 @@ sectionStart = do
   closeDelimiter
   if isSection
     then do
+      modify \s -> s {level = level s + 1}
       child <- manyNodes
-      modify \s -> s {alone = alone'}
+      modify \s -> s {alone = alone', level = level'}
       end <- sectionEnd name <?> "end of section " <> show name
       return $
         Nodes
