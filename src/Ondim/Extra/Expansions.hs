@@ -190,7 +190,7 @@ switchWithDefault tag node = do
 
 ifBound :: forall t m. GlobalConstraints m t => Expansion m t
 ifBound node = do
-  attrs <- snd <<$>> attributes node
+  attrs <- fst <<$>> attributes node
   bound <- allM exists attrs
   ifElse bound node
   where
@@ -198,7 +198,7 @@ ifBound node = do
 
 anyBound :: forall t m. GlobalConstraints m t => Expansion m t
 anyBound node = do
-  attrs <- snd <<$>> attributes node
+  attrs <- fst <<$>> attributes node
   bound <- anyM exists attrs
   ifElse bound node
   where
