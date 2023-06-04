@@ -143,10 +143,10 @@ ifElse ::
   Expansion m t
 ifElse cond node = do
   let els = children node
-      yes = filter (not . identifiesAs ["o", "else"]) els
+      yes = filter (not . identifiesAs ["else"]) els
       no =
         maybe [] children $
-          find (identifiesAs ["o", "else"]) els
+          find (identifiesAs ["else"]) els
   if cond
     then liftNodes yes
     else liftNodes no
@@ -154,9 +154,9 @@ ifElse cond node = do
 
 switchCases :: forall m. Text -> ExpansionMap m
 switchCases tag =
-  "o:case" #* \(caseNode :: t) -> do
+  "case" #* \(caseNode :: t) -> do
     attrs <- attributes @t caseNode
-    withoutExpansions ["o:case"] $
+    withoutExpansions ["case"] $
       if Just tag == getSingleAttr "tag" attrs
         then liftChildren caseNode
         else pure []
@@ -181,9 +181,9 @@ switchWithDefault tag node = do
   let els = children node
   match <- (`findM` els) \x -> do
     caseTag <- getSingleAttr "tag" <$> attributes x
-    return $ identifiesAs ["o", "case"] x && caseTag == Just tag
+    return $ identifiesAs ["case"] x && caseTag == Just tag
   fromMaybe (pure []) do
-    child <- match <|> find (identifiesAs ["o", "default"]) els
+    child <- match <|> find (identifiesAs ["default"]) els
     pure $ liftChildren child
   where
     findM p = foldr (\x -> ifM (p x) (pure $ Just x)) (pure Nothing)

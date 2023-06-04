@@ -13,15 +13,14 @@ bindDefaults ::
 bindDefaults st =
   st
     `binding` do
-      "o" #. do
-        "ignore" #* ignore
-        "if" #* ifBound
-        "any" #* anyBound
-        "match" #* switchBound
-        "bind" #* bind
-        "scope" #* scope
-        "with" #* with
-        "open" #* open
+      "ignore" #* ignore
+      "if" #* ifBound
+      "any" #* anyBound
+      "match" #* switchBound
+      "bind" #* bind
+      "scope" #* scope
+      "with" #* with
+      "open" #* open
       "" ## liftChildren @Node
       "@try" ## const $ pure ([] :: [Attribute])
     `bindingFilters` do
