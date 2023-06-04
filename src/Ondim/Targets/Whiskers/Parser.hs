@@ -122,8 +122,8 @@ sectionStart = do
   alone' <- gets alone
   isSection <- parseBool $ char '#'
   name <- takeWhileP (Just "node name") isAllowedName
-  attributes <- option [] $ try $ hspace1 *> (pair `sepBy1` hspace1)
-  hspace
+  attributes <- option [] $ space1 *> (pair `sepBy1'` space1)
+  space
   closeDelimiter
   if isSection
     then do
@@ -144,10 +144,11 @@ sectionStart = do
               |> Single name attributes
           )
   where
+    sepBy1' p sep = (:) <$> p <*> many (try $ sep >> p)
     str =
       (char '"' *> (toText <$> manyTill L.charLiteral (char '"')))
         <|> takeWhile1P Nothing isAllowedName
-    pair = try $ liftA2 (,) str $ option "" $ try $ hspace *> char '=' *> hspace *> str
+    pair = try $ liftA2 (,) str $ option "" $ try $ space *> char '=' *> space *> str
 
 isAllowedName :: Char -> Bool
 isAllowedName c =
