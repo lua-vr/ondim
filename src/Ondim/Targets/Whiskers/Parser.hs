@@ -120,6 +120,7 @@ sectionStart :: Parser Nodes
 sectionStart = do
   (ws, bolws) <- try $ openDelimiter <* notFollowedBy (char '/')
   alone' <- gets alone
+  space
   isSection <- parseBool $ char '#'
   name <- takeWhileP (Just "node name") isAllowedName
   attributes <- option [] $ space1 *> (pair `sepBy1'` space1)
@@ -165,8 +166,9 @@ isAllowedName c =
 sectionEnd :: Text -> Parser Nodes
 sectionEnd name = do
   (ws, _) <- openDelimiter
+  hspace
   _ <- char '/'
-  _ <- string name
+  _ <- optional (string name)
   hspace
   closeDelimiter
   return $ one $ Textual ws
