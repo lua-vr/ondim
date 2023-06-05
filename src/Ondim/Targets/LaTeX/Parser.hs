@@ -67,14 +67,16 @@ command :: Parser Nodes
 command = do
   _ <- try $ string "\\@"
   name <- takeWhileP Nothing isAllowedName
-  attrs <- option [] $ try do
-    space
-    _ <- char '['
+  attrs <- option [] do
+    _ <- try do
+      space
+      char '['
     space
     pair `sepBy` char ',' <* char ']'
-  arg <- option [] $ try do
-    space
-    _ <- char '{'
+  arg <- option [] do
+    _ <- try do
+      space
+      char '{'
     inner <* char '}'
   return $ one (Command (unCamel name) attrs arg)
   where
