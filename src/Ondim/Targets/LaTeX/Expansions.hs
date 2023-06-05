@@ -17,8 +17,9 @@ bindDefaults st =
   st
     `binding` do
       "raw" ## \(node :: Node) -> do
-        t <- lookupAttr' "text" node
-        return [Text t]
+        name <- lookupAttr' "name" node
+        t' <- callText name
+        return [Text t']
       "ignore" #* ignore
       "if" #* ifBound
       "any" #* anyBound
