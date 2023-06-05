@@ -37,6 +37,10 @@ flag with-whiskers
   description: Include Whiskers definitions and dependencies.
   default:     True
 
+flag with-latex
+  description: Include latex definitions and dependencies.
+  default:     True
+
 library
   -- Modules included in this executable, other than Main.
   -- other-modules:
@@ -105,6 +109,15 @@ library
       Ondim.Targets.Whiskers.Expansions
       Ondim.Targets.Whiskers.Instances
       Ondim.Targets.Whiskers.Load
+
+  if flag(with-latex)
+    build-depends:   megaparsec
+    other-modules:   Ondim.Targets.LaTeX.Parser
+    exposed-modules:
+      Ondim.Targets.LaTeX
+      Ondim.Targets.LaTeX.Expansions
+      Ondim.Targets.LaTeX.Instances
+      Ondim.Targets.LaTeX.Load
 
   mixins:
     base hiding (Prelude),
