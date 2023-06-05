@@ -74,7 +74,7 @@ listList ::
   [a] ->
   Expansion m t
 listList f list node = do
-  alias <- fromMaybe "item" <$> lookupAttr "as" node
+  alias <- fromMaybe "this" <$> lookupAttr "as" node
   expansion <- do
     expName <- lookupAttr "with" node
     case expName of
