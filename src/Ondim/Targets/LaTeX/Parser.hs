@@ -1,7 +1,7 @@
 -- | This is a fake LaTeX parser.
 module Ondim.Targets.LaTeX.Parser where
 
-import Data.Char (isAsciiLower, isAsciiUpper, isSpace, isUpper, toLower, isSymbol)
+import Data.Char (isAsciiLower, isAsciiUpper, isSpace, isUpper, toLower, isSymbol, isNumber)
 import Data.Sequence (Seq (..), (|>))
 import Data.Text qualified as T
 import Ondim.Targets.LaTeX.Instances (Node (..))
@@ -88,7 +88,7 @@ command = do
       local
         (\s -> s {level = 1 + level s})
         (toNodeList <$> manyNodes)
-    isAllowedKey c = isAllowedName c || c == '.' || c == '-' || c == ':'
+    isAllowedKey c = isAllowedName c || isNumber c || c == '.' || c == '-' || c == ':'
     gpVal = char '{' *> (toNodeList <$> manyNodes) <* char '}'
     nVal = one . Text <$> takeWhile1P Nothing isAllowedKey
     pair = do
