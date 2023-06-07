@@ -50,4 +50,4 @@ instance OndimNode Node where
   identify = \case
     Command t _ _ -> Just t
     _ -> Nothing
-  fromText = Just $ one . Text . escapeLaTeX
+  fromText = Just $ one . Text

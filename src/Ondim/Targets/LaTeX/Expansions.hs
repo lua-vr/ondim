@@ -6,7 +6,7 @@ module Ondim.Targets.LaTeX.Expansions where
 import Ondim
 import Ondim.Extra.Exceptions (notBoundFilter)
 import Ondim.Extra.Expansions
-import Ondim.Targets.LaTeX.Instances (Node (..))
+import Ondim.Targets.LaTeX.Instances (Node (..), escapeLaTeX)
 
 bindDefaults ::
   forall m t.
@@ -16,10 +16,9 @@ bindDefaults ::
 bindDefaults st =
   st
     `binding` do
-      "raw" ## \(node :: Node) -> do
-        name <- lookupAttr' "name" node
-        t' <- callText name
-        return [Text t']
+      "escaped" ## \(node :: Node) -> do
+        t <- lookupAttr' "text" node
+        return [Text $ escapeLaTeX t]
       "ignore" #* ignore
       "if" #* ifBound
       "any" #* anyBound
