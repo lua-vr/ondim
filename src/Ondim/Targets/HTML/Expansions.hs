@@ -26,7 +26,7 @@ bindDefaults st =
         "open" #* open
       "@try" ## const $ pure ([] :: [Attribute])
     `bindingFilters` do
-      "attrSub" $# attrSub
+      "attrSub" $* attrSub
       "mbAttr" $# mbAttrFilter
       "notBound" $# notBoundFilter @HtmlNode (`Set.member` validHtmlTags)
 

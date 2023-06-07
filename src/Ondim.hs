@@ -31,10 +31,10 @@ module Ondim
     insertExpansion,
     deleteExpansion,
     Filter,
-    GlobalFilter,
+    MapFilter,
     SomeFilter,
     someFilter,
-    globalFilter,
+    mapFilter,
     Filters,
     OndimState (..),
 
@@ -290,13 +290,13 @@ infixr 0 $#
 ($#) :: Typeable t => Text -> Filter m t -> FilterMap m
 name $# ex = name $: someFilter ex
 
-globalFilter :: GlobalFilter m -> SomeFilter m
-globalFilter = GlobalFilter
+mapFilter :: Typeable t => MapFilter m t -> SomeFilter m
+mapFilter = SomeMapFilter typeRep
 
 infixr 0 $*
 
-($*) :: Text -> GlobalFilter m -> FilterMap m
-name $* ex = name $: globalFilter ex
+($*) :: Typeable t => Text -> MapFilter m t -> FilterMap m
+name $* ex = name $: mapFilter ex
 
 -- | Infix version of @withExpansions@ to bind using MapSyntax.
 binding ::

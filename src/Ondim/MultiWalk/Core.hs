@@ -31,9 +31,19 @@ instance {-# OVERLAPPABLE #-} (Carrier a ~ [a], OndimNode a) => CanLift a where
 -- * Expansion state manipulation
 
 getSomeFilter :: forall a m. GlobalConstraints m a => SomeFilter m -> Maybe (Filter m a)
-getSomeFilter (GlobalFilter v) = Just v
-getSomeFilter (SomeFilter t v)
-  | Just HRefl <- t `eqTypeRep` rep = Just v
+getSomeFilter x
+  | SomeFilter t v <- x,
+    Just HRefl <- t `eqTypeRep` rep =
+      Just v
+  | otherwise = Nothing
+  where
+    rep = typeRep :: TypeRep a
+
+getSomeMapFilter :: forall a m. GlobalConstraints m a => SomeFilter m -> Maybe (MapFilter m a)
+getSomeMapFilter x
+  | SomeMapFilter t v <- x,
+    Just HRefl <- t `eqTypeRep` rep =
+      Just v
   | otherwise = Nothing
   where
     rep = typeRep :: TypeRep a
@@ -112,7 +122,13 @@ liftNode ::
   t ->
   Ondim m [t]
 liftNode node = do
-  apFilters <- Ondim $ gets $ foldr (\f g -> f node . g) id . mapMaybe (getSomeFilter @t) . toList . filters
+  apFilters <-
+    Ondim $
+      gets $
+        foldr (\f g -> f node . g) id
+          . mapMaybe (getSomeFilter @t)
+          . toList
+          . filters
   apFilters $
     case identify node of
       Just name -> expand name
@@ -130,7 +146,15 @@ liftNodes ::
   (Monad m, OndimNode t) =>
   [t] ->
   Ondim m [t]
-liftNodes = foldMapM liftNode
+liftNodes nodes = do
+  apFilters <-
+    Ondim $
+      gets $
+        foldr (.) id
+          . mapMaybe (getSomeMapFilter @t)
+          . toList
+          . filters
+  apFilters $ foldMapM liftNode nodes
 
 -- | Lift only the substructures of a node.
 liftSubstructures :: forall m t. (Monad m, OndimNode t) => t -> Ondim m t

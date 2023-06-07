@@ -282,5 +282,5 @@ interpParser = do
 attrEdit :: Monad m => Text -> Ondim m Text
 attrEdit = streamEditT interpParser callText
 
-attrSub :: Monad m => Filter m Text
-attrSub t _ = one <$> attrEdit t
+attrSub :: Monad m => MapFilter m Text
+attrSub t = mapM attrEdit =<< t

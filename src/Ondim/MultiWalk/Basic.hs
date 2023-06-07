@@ -57,12 +57,12 @@ callStackSite = case GHC.toList callStack of
 -- Filters
 
 type Filter m t = t -> Ondim m [t] -> Ondim m [t]
+type MapFilter m t = Ondim m [t] -> Ondim m [t]
 type Filters m = Map Text (SomeFilter m)
-type GlobalFilter m = forall a. GlobalConstraints m a => Filter m a
 
 data SomeFilter m where
   SomeFilter :: TypeRep a -> Filter m a -> SomeFilter m
-  GlobalFilter :: GlobalFilter m -> SomeFilter m
+  SomeMapFilter :: TypeRep a -> MapFilter m a -> SomeFilter m
 
 -- Expansions
 

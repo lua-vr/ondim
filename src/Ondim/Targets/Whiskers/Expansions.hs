@@ -23,6 +23,6 @@ bindDefaults st =
       "open" #* open
       "" ## liftChildren @Node
     `bindingFilters` do
-      "attrSub" $# attrSub
+      "attrSub" $* attrSub
       "mbAttr" $# mbAttrFilter
       "notBound" $# notBoundFilter @Node (const False)

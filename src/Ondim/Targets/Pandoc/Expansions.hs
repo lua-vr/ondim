@@ -23,7 +23,7 @@ bindDefaults st =
       "bind-text" ## bindText (stringify @Block)
       "bind-text" ## bindText (stringify @Inline)
     `bindingFilters` do
-      "attrSub" $# attrSub
+      "attrSub" $* attrSub
 
 -- Miscellaneous (from Text.Pandoc.Shared)
 
