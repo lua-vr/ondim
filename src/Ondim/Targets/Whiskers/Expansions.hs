@@ -22,7 +22,6 @@ bindDefaults st =
       "with" #* with
       "open" #* open
       "" ## liftChildren @Node
-      "@try" ## const $ pure ([] :: [Attribute])
     `bindingFilters` do
       "attrSub" $# attrSub
       "mbAttr" $# mbAttrFilter
