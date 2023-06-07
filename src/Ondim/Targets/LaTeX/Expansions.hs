@@ -28,6 +28,9 @@ bindDefaults st =
       "with" #* with
       "open" #* open
       "" ## liftChildren @Node
-      "@try" ## const $ pure ([] :: [Attribute])
     `bindingFilters` do
-      "notBound" $# notBoundFilter @Node (const False)
+      "notBound" $# notBoundFilter @Node (== "sep")
+      "sep" $* fmap (foldr go [])
+         where
+           go (Command "sep" _ _) (Command "sep" _ _ : xs) = Text "\n\n" : xs
+           go x xs = x : xs
