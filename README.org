@@ -2,7 +2,7 @@
 
 #+html: <img src="https://upload.wikimedia.org/wikipedia/commons/0/0d/An_alphabet_of_celebrities_-_U.jpg" align="right" width="30%">
 
-Ondim is a library for creating templating engines for arbitrary formats, inspired by Heist (which only works for HTML). It also includes HTML, Pandoc and LaTeX[fn:1] examples that work out-of-the-box. 
+Ondim is a library for creating templating engines for arbitrary formats, inspired by Heist (which only works for HTML). It also includes HTML, Pandoc, LaTeX and Whiskers (a new template language very similar to Mustache) targets that work out-of-the-box. 
 
 The main idea is to reuse existing libraries that will provide the target  language's parser, types and renderer, and easily build an "expansion" layer on top. If you are familiar with Heist, for HTML this is done by binding /named expansions/ (in Heist they are called Splices) that programatically transform the contents of HTML elements whose tags match the name.
 
@@ -55,4 +55,3 @@ This is written in plain Pandoc markdown, and meant to be parsed by the Pandoc r
 
 But HTML and Pandoc are just examples, each defined in very few lines of code under =Ondim.Targets.HTML= and =Ondim.Targets.Pandoc=. And due to the use of =multiwalk='s generics, most of it is instantiating generic instances. Ondim makes it easy to define your own!
 
-[fn:1] LaTeX is todo
