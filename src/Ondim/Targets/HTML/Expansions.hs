@@ -5,6 +5,7 @@ import Ondim
 import Ondim.Extra.Exceptions (mbAttrFilter, notBoundFilter)
 import Ondim.Extra.Expansions
 import Ondim.Targets.HTML.Instances
+import qualified Text.XmlHtml as X
 
 bindDefaults ::
   forall m t.
@@ -15,6 +16,14 @@ bindDefaults st =
   st
     `binding` do
       "o" #. do
+        "raw" ## \(node :: HtmlNode) -> do
+          t <- lookupAttr' "text" node
+          return [rawNode t]
+        "expanded" ## \(node :: HtmlNode) -> do
+          t <- lookupAttr' "text" node
+          fromMaybe (pure []) do
+            parsed <- rightToMaybe $ X.parseHTML "" (encodeUtf8 t)
+            return $ liftNodes $ fromNodeList $ X.docContent parsed
         "ignore" #* ignore
         "if" #* ifBound
         "any" #* anyBound
