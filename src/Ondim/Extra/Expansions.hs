@@ -40,11 +40,11 @@ open :: GlobalExpansion m
 open node = do
   name' <- viaNonEmpty (fst . head) <$> attributes node
   name <- maybe (throwTemplateError "Namespace not provided.") pure name'
-  exps <- lookupExpansion name . expansions <$> getOndimS
-  withExpansion name Nothing $
+  exps <- getNamespace name
+  withoutExpansions [name] $
     case exps of
-      Just (Namespace v) -> withExpansions v $ liftChildren node
-      _ -> throwTemplateError $ "The namespace " <> show name <> " is not defined."
+      Just v -> withExpansions v $ liftChildren node
+      Nothing -> throwTemplateError $ "The namespace " <> show name <> " is not defined."
 
 with :: GlobalExpansion m
 with node = do
@@ -52,7 +52,7 @@ with node = do
   actions <-
     attributes node <&> map \(k, v) ->
       let expansion = lookupExpansion v exps
-       in withExpansion v Nothing . withExpansion k expansion
+       in withoutExpansions [v] . withSomeExpansion k expansion
   foldr ($) (liftChildren node) actions
 
 listExp ::
@@ -87,7 +87,7 @@ listList f list node = do
         | Just ft <- fromText @t = intercalate (ft txt)
         | otherwise = join
       join' = maybe join inter intercalateWith
-  withExpansion alias Nothing $
+  withSomeExpansion alias Nothing $
     join' <$> forM list \el ->
       expansion node
         `binding` do alias #: f el
@@ -103,7 +103,7 @@ nthList f list node = do
   el <- fromMaybe (throwTemplateError $ err n) do
     n' <- readMaybe . toString =<< n
     pure <$> maybeAt n' list
-  case getSomeExpansion $ f el of
+  case fromSomeExpansion $ f el of
     Just e -> e node
     Nothing -> throwTemplateError (err n)
   where
@@ -214,42 +214,43 @@ switchBound node = do
 -- Binding
 
 -- | This expansion works like Heist's `bind` splice
-bind :: forall t m. GlobalConstraints m t => Expansion m t
+bind :: HasCallStack => GlobalExpansion m
 bind node = do
   attrs <- attributes node
   defSite <- getCurrentSite
-  whenJust (getSingleAttr "name" attrs) $ \name -> do
-    putExpansion name $ someExpansion' defSite $ \inner -> do
-      callSite <- getCurrentSite
-      attrs' <- attributes inner
-      withSite defSite $
-        liftChildren node
-          `binding` do
-            -- Note to self: writing "this.children" is intentional. rebember that
-            -- using `#.` would mean other stuff under the namespace is erased. We
-            -- don't want that.
-            "this.children"
-              #: someExpansion' defSite
-              $ const (withSite callSite $ liftChildren inner)
-            censor (map $ first ("this.attrs." <>)) $
-              assocsExp (textMData' defSite . pure) attrs'
-  pure []
+  case getSingleAttr "name" attrs of
+    Just name -> do
+      putSomeExpansion name $ someExpansion' defSite $ \inner -> do
+        callSite <- getCurrentSite
+        attrs' <- attributes inner
+        withSite defSite $
+          liftChildren node
+            `binding` do
+              "caller" #. do
+                "children" ## const (withSite callSite $ liftChildren inner)
+                "attrs" #. assocsExp textData attrs'
+      pure []
+    Nothing -> throwTemplateError "No name for expansion"
 
 {- | This expansion works like Heist's `bind` splice, but binds what's inside as
   text (via the toTxt parameter).
 -}
 bindText ::
+  HasCallStack =>
   GlobalConstraints m t =>
   (t -> Text) ->
   Expansion m t
 bindText toTxt self = do
   attrs <- attributes self
   defSite <- getCurrentSite
-  whenJust (getSingleAttr "name" attrs) $ \name -> do
-    putExpansion name $ textMData' defSite $ do
-      child <- liftChildren self
-      return $ foldMap toTxt child
-  pure []
+  case getSingleAttr "name" attrs of
+    Just name -> do
+      putSomeExpansion name $ textMData' defSite $
+        withSite defSite $ do
+          child <- liftChildren self
+          return $ foldMap toTxt child
+      pure []
+    Nothing -> throwTemplateError "No name for expansion"
 
 {- | This expansion creates a new scope for the its children, in the sense that
  the inner state does not leak outside.
@@ -280,7 +281,7 @@ interpParser = do
   pure s
 
 attrEdit :: Monad m => Text -> Ondim m Text
-attrEdit = streamEditT interpParser callText
+attrEdit = streamEditT interpParser callTextData
 
 attrSub :: Monad m => MapFilter m Text
 attrSub t = mapM attrEdit =<< t

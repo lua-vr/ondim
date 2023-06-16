@@ -25,6 +25,7 @@ module Ondim
     textMData,
     textMData',
     namespace,
+    namespace',
     Expansions,
     splitExpansionKey,
     lookupExpansion,
@@ -67,15 +68,16 @@ module Ondim
     (#.),
     (#:),
     binding,
-    withExpansion,
     withExpansions,
     withoutExpansions,
-    putExpansion,
+    withSomeExpansion,
+    putSomeExpansion,
+    fromSomeExpansion,
     getExpansion,
-    getSomeExpansion,
     getTextData,
+    getNamespace,
     callExpansion,
-    callText,
+    callTextData,
     -- Filters
     FilterMap,
     ($#),
@@ -99,6 +101,7 @@ module Ondim
 
     -- * Structure
     getSubstructure,
+    modSubstructure,
     modSubstructureM,
     children,
     liftChildren,
@@ -163,13 +166,13 @@ modifyOndimS = Ondim . modify'
 putOndimS :: Monad m => OndimState m -> Ondim m ()
 putOndimS = Ondim . put
 
-withExpansion ::
+withSomeExpansion ::
   Monad m =>
   Text ->
   Maybe (SomeExpansion m) ->
   Ondim m a ->
   Ondim m a
-withExpansion name ex st = do
+withSomeExpansion name ex st = do
   pEx <- Ondim $ gets (lookupExpansion name . expansions)
   Ondim $ modify' \s -> s {expansions = insOrDel ex (expansions s)}
   st <* modifyOndimS \s -> s {expansions = insOrDel pEx (expansions s)}
@@ -191,7 +194,7 @@ withFilter name ex st = do
 
 -- | "Bind" new expansions locally.
 withExpansions :: Monad m => Expansions m -> Ondim m a -> Ondim m a
-withExpansions (Expansions exps) o = foldr (\(k, v) -> withExpansion k (Just v)) o (HMap.toList exps)
+withExpansions (Expansions exps) o = foldr (\(k, v) -> withSomeExpansion k (Just v)) o (HMap.toList exps)
 
 -- | "Bind" filters locally.
 withFilters :: Monad m => Filters m -> Ondim m a -> Ondim m a
@@ -199,15 +202,15 @@ withFilters filt o = foldr (\(k, v) -> withFilter k (Just v)) o (Map.toList filt
 
 -- | "Unbind" many expansions locally.
 withoutExpansions :: Monad m => [Text] -> Ondim m a -> Ondim m a
-withoutExpansions names o = foldr (`withExpansion` Nothing) o names
+withoutExpansions names o = foldr (`withSomeExpansion` Nothing) o names
 
 -- | "Unbind" many expansions locally.
 withoutFilters :: Monad m => [Text] -> Ondim m a -> Ondim m a
 withoutFilters names o = foldr (`withFilter` Nothing) o names
 
 -- | Put a new expansion into the local state, modifying the scope.
-putExpansion :: Monad m => Text -> SomeExpansion m -> Ondim m ()
-putExpansion key ex =
+putSomeExpansion :: Monad m => Text -> SomeExpansion m -> Ondim m ()
+putSomeExpansion key ex =
   modifyOndimS \s -> s {expansions = insertExpansion key ex (expansions s)}
 
 type ExpansionMap m = Writer [(Text, Maybe (SomeExpansion m))] ()
@@ -270,6 +273,9 @@ namespace ex = Namespace $ foldl' go mempty exps
     go = flip $ uncurry insertExpansion
     exps = mapMaybe sequence $ execWriter ex
 
+namespace' :: Expansions m -> SomeExpansion m
+namespace' = Namespace
+
 infixr 0 #.
 
 (#.) :: Text -> ExpansionMap m -> ExpansionMap m
@@ -306,7 +312,7 @@ binding ::
   Ondim m a
 binding o exps =
   let kvs = execWriter exps
-   in foldl' (flip $ uncurry withExpansion) o kvs
+   in foldl' (flip $ uncurry withSomeExpansion) o kvs
 
 -- | Infix version of @withFilters@ to bind using MapSyntax.
 bindingFilters ::
@@ -359,10 +365,12 @@ fromTemplate ::
   SomeExpansion m
 fromTemplate fileSite tpl =
   someExpansion' fileSite \inner -> do
-    site <- getCurrentSite
+    callSite <- getCurrentSite
     withSite fileSite $
-      liftNodes tpl `binding` do
-        "this.children" ## const (withSite site $ liftChildren inner)
+      liftNodes tpl
+        `binding` do
+          "caller" #. do
+            "children" ## const (withSite callSite $ liftChildren inner)
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
 callExpansion :: forall t m. GlobalConstraints m t => Text -> Expansion m t
@@ -371,8 +379,8 @@ callExpansion name arg = do
   maybe (throwNotBound @t name) ($ arg) exps
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
-callText :: forall m. Monad m => Text -> Ondim m Text
-callText name = do
+callTextData :: forall m. Monad m => Text -> Ondim m Text
+callTextData name = do
   exps <- getTextData name
   maybe (throwNotBound @Text name) pure exps
 

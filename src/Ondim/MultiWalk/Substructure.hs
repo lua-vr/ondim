@@ -62,3 +62,12 @@ modSubstructureM ::
   t ->
   m t
 modSubstructureM = modSubstructureM' @a @(ExpTypes t)
+
+modSubstructure ::
+  ( OndimNode t,
+    AllMods (Substructure a) (ExpTypes t)
+  ) =>
+  ([a] -> [a]) ->
+  t ->
+  t
+modSubstructure f = runIdentity . modSubstructureM (pure . f)

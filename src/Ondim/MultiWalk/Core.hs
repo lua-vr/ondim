@@ -48,19 +48,19 @@ getSomeMapFilter x
   where
     rep = typeRep :: TypeRep a
 
-getSomeExpansion ::
+fromSomeExpansion ::
   forall a m.
   GlobalConstraints m a =>
   SomeExpansion m ->
   Maybe (Expansion m a)
-getSomeExpansion (TextData _ t)
+fromSomeExpansion (TextData _ t)
   | Just f <- fromText = Just (const $ f <$> t)
   | otherwise = Nothing
-getSomeExpansion (GlobalExpansion _ e) = Just e
-getSomeExpansion (SomeExpansion t _ v)
+fromSomeExpansion (GlobalExpansion _ e) = Just e
+fromSomeExpansion (SomeExpansion t _ v)
   | Just HRefl <- t `eqTypeRep` typeRep @a = Just v
   | otherwise = Nothing
-getSomeExpansion Namespace {} = Nothing
+fromSomeExpansion Namespace {} = Nothing
 
 splitExpansionKey :: Text -> [Text]
 splitExpansionKey = T.split (\c -> c /= '-' && not (isLetter c))
@@ -103,6 +103,13 @@ getTextData name = do
     Just (TextData _ text) -> Just <$> text
     _ -> return Nothing
 
+getNamespace :: Monad m => Text -> Ondim m (Maybe (Expansions m))
+getNamespace name = do
+  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
+  case mbValue of
+    Just (Namespace n) -> return $ Just n
+    _ -> return Nothing
+
 getExpansion ::
   forall t m.
   GlobalConstraints m t =>
@@ -110,7 +117,7 @@ getExpansion ::
   Ondim m (Maybe (Expansion m t))
 getExpansion name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
-  return $ (expCtx name .) <$> (getSomeExpansion =<< mbValue)
+  return $ (expCtx name .) <$> (fromSomeExpansion =<< mbValue)
 {-# INLINEABLE getExpansion #-}
 
 {- | This function recursively lifts the nodes into an unvaluated state, that will
@@ -180,5 +187,4 @@ expCtx name (Ondim ctx) = do
   if depth gst >= 200
     then -- To avoid recursive expansions
       throwOndim MaxExpansionDepthExceeded
-    else
-      Ondim $ local (\s -> s { depth = depth s + 1, expansionTrace = name : expansionTrace s }) ctx
+    else Ondim $ local (\s -> s {depth = depth s + 1, expansionTrace = name : expansionTrace s}) ctx
