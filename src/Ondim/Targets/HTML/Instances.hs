@@ -65,7 +65,8 @@ instance OndimNode HtmlNode where
          ToSpec HtmlNode,
          ToSpecSel ('ConsSel "TextNode") (OneSub Text)
        ]
-  identify (Element _ name _ _) = Just name
+  identify (Element _ name _ _)
+    | Just (':', name') <- T.uncons name = Just name'
   identify _ = Nothing
   fromText = Just (one . TextNode)
   attributes = substructureAttributes

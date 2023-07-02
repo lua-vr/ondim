@@ -26,7 +26,7 @@ module Ondim
     textMData',
     namespace,
     namespace',
-    Expansions,
+    Namespace,
     splitExpansionKey,
     lookupExpansion,
     insertExpansion,
@@ -49,7 +49,8 @@ module Ondim
     ExceptionType (..),
     OndimException (..),
     throwTemplateError,
-    throwNotBound,
+    ExpansionFailure (..),
+    throwExpFailure,
     catchOndim,
     DefinitionSite (..),
     getCurrentSite,
@@ -68,7 +69,7 @@ module Ondim
     (#.),
     (#:),
     binding,
-    withExpansions,
+    withNamespace,
     withoutExpansions,
     withSomeExpansion,
     putSomeExpansion,
@@ -192,9 +193,10 @@ withFilter name ex st = do
   where
     insOrDel x = Map.alter (const x) name
 
--- | "Bind" new expansions locally.
-withExpansions :: Monad m => Expansions m -> Ondim m a -> Ondim m a
-withExpansions (Expansions exps) o = foldr (\(k, v) -> withSomeExpansion k (Just v)) o (HMap.toList exps)
+-- | "Bind" new namespace locally.
+withNamespace :: Monad m => Namespace m -> Ondim m a -> Ondim m a
+withNamespace (Namespace exps) o =
+  foldr (\(k, v) -> withSomeExpansion k (Just v)) o (HMap.toList exps)
 
 -- | "Bind" filters locally.
 withFilters :: Monad m => Filters m -> Ondim m a -> Ondim m a
@@ -268,13 +270,13 @@ infixr 0 #*
 name #* ex = name #: globalExpansion ex
 
 namespace :: ExpansionMap m -> SomeExpansion m
-namespace ex = Namespace $ foldl' go mempty exps
+namespace ex = NamespaceData $ foldl' go mempty exps
   where
     go = flip $ uncurry insertExpansion
     exps = mapMaybe sequence $ execWriter ex
 
-namespace' :: Expansions m -> SomeExpansion m
-namespace' = Namespace
+namespace' :: Namespace m -> SomeExpansion m
+namespace' = NamespaceData
 
 infixr 0 #.
 
@@ -376,13 +378,13 @@ fromTemplate fileSite tpl =
 callExpansion :: forall t m. GlobalConstraints m t => Text -> Expansion m t
 callExpansion name arg = do
   exps <- getExpansion name
-  maybe (throwNotBound @t name) ($ arg) exps
+  either (throwExpFailure @t name) ($ arg) exps
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
 callTextData :: forall m. Monad m => Text -> Ondim m Text
 callTextData name = do
   exps <- getTextData name
-  maybe (throwNotBound @Text name) pure exps
+  either (throwExpFailure @Text name) pure exps
 
 -- * Attributes
 

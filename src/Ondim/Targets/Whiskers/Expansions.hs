@@ -1,8 +1,8 @@
 module Ondim.Targets.Whiskers.Expansions where
 
 import Ondim
-import Ondim.Extra.Exceptions (mbAttrFilter, notBoundFilter)
-import Ondim.Extra.Expansions
+import Ondim.Extra.Exceptions (tryAttrFilter, tryFilter)
+import Ondim.Extra.Standard (attrSub, standardMap)
 import Ondim.Targets.Whiskers.Instances (Node)
 
 bindDefaults ::
@@ -13,16 +13,9 @@ bindDefaults ::
 bindDefaults st =
   st
     `binding` do
-      "ignore" #* ignore
-      "if" #* ifBound
-      "any" #* anyBound
-      "match" #* switchBound
-      "bind" #* bind
-      "scope" #* scope
-      "with" #* with
-      "open" #* open
+      standardMap
       "" ## liftChildren @Node
     `bindingFilters` do
       "attrSub" $* attrSub
-      "mbAttr" $# mbAttrFilter
-      "notBound" $# notBoundFilter @Node (const False)
+      "tryAttr" $# tryAttrFilter
+      "try" $# tryFilter @Node

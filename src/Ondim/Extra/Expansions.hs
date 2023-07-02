@@ -1,20 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 
--- | Uselful examples of expansions.
+-- | Useful library of expansions.
 module Ondim.Extra.Expansions where
 
-import Control.Monad.Writer.CPS (censor)
-import Data.Attoparsec.Text (Parser, char, string, takeTill)
 import Data.List qualified as L
 import Data.Map qualified as Map
 import Ondim
-import Ondim.MultiWalk.Basic (SomeExpansion (..))
-import Replace.Attoparsec.Text (streamEditT)
-
-newtype TemplateError = TemplateError Text
-  deriving stock (Show)
-  deriving anyclass (Exception)
 
 lookupAttr' ::
   (Monad m, OndimNode t) =>
@@ -22,38 +14,27 @@ lookupAttr' ::
   t ->
   Ondim m Text
 lookupAttr' key node =
-  maybe (throwTemplateError $ "Missing '" <> key <> "' argument.") pure . L.lookup key
+  maybe (throwTemplateError $ "Missing '" <> key <> "' argument.") pure
+    . L.lookup key
     =<< attributes node
 
 getSingleAttr :: Text -> [Attribute] -> Maybe Text
 getSingleAttr name attrs = L.lookup name attrs <|> viaNonEmpty (fst . head) attrs
 
+getSingleAttr' ::
+  (Monad m, OndimNode t) =>
+  Text ->
+  t ->
+  Ondim m Text
+getSingleAttr' name node =
+  maybe (throwTemplateError $ "Missing '" <> name <> "' argument") pure
+    . getSingleAttr name
+    =<< attributes node
+
 identifiesAs :: OndimNode t => [Text] -> t -> Bool
 identifiesAs n = (Just n ==) . fmap splitExpansionKey . identify
 
--- * Expansions
-
-ignore :: forall t m. Monad m => Expansion m t
-ignore = const $ pure []
-
-open :: GlobalExpansion m
-open node = do
-  name' <- viaNonEmpty (fst . head) <$> attributes node
-  name <- maybe (throwTemplateError "Namespace not provided.") pure name'
-  exps <- getNamespace name
-  withoutExpansions [name] $
-    case exps of
-      Just v -> withExpansions v $ liftChildren node
-      Nothing -> throwTemplateError $ "The namespace " <> show name <> " is not defined."
-
-with :: GlobalExpansion m
-with node = do
-  exps <- expansions <$> getOndimS
-  actions <-
-    attributes node <&> map \(k, v) ->
-      let expansion = lookupExpansion v exps
-       in withoutExpansions [v] . withSomeExpansion k expansion
-  foldr ($) (liftChildren node) actions
+-- * Lists
 
 listExp ::
   Monad m =>
@@ -62,9 +43,8 @@ listExp ::
   ExpansionMap m
 listExp f list = do
   "size" #@ show $ length list
-  "nonempty" #* ifElse (not $ null list)
+  unless (null list) $ "nonempty" #@ "true"
   "list" #* listList f list
-  "nth" #* nthList f list
   whenJust (viaNonEmpty head list) (("head" #:) . f)
 
 listList ::
@@ -75,13 +55,6 @@ listList ::
   Expansion m t
 listList f list node = do
   alias <- fromMaybe "this" <$> lookupAttr "as" node
-  expansion <- do
-    expName <- lookupAttr "with" node
-    case expName of
-      Just name -> do
-        exps <- getExpansion name
-        maybe (throwNotBound @t name) return exps
-      Nothing -> return liftChildren
   intercalateWith <- lookupAttr "intercalate" node
   let inter txt
         | Just ft <- fromText @t = intercalate (ft txt)
@@ -89,25 +62,10 @@ listList f list node = do
       join' = maybe join inter intercalateWith
   withSomeExpansion alias Nothing $
     join' <$> forM list \el ->
-      expansion node
+      liftChildren node
         `binding` do alias #: f el
 
-nthList ::
-  forall a m t.
-  GlobalConstraints m t =>
-  (a -> SomeExpansion m) ->
-  [a] ->
-  Expansion m t
-nthList f list node = do
-  n <- getSingleAttr "n" <$> attributes node
-  el <- fromMaybe (throwTemplateError $ err n) do
-    n' <- readMaybe . toString =<< n
-    pure <$> maybeAt n' list
-  case fromSomeExpansion $ f el of
-    Just e -> e node
-    Nothing -> throwTemplateError (err n)
-  where
-    err n = "List index error: no such index " <> show n
+-- * Assocs and maps
 
 assocsExp ::
   Monad m =>
@@ -116,7 +74,7 @@ assocsExp ::
   ExpansionMap m
 assocsExp vf obj = do
   "size" #@ show $ length obj
-  "nonempty" #* ifElse (not $ null obj)
+  unless (null obj) $ "nonempty" #@ "true"
   "list" #* listList kv obj
   "keys" #* listList textData (map fst obj)
   "values" #* listList vf (map snd obj)
@@ -133,6 +91,8 @@ mapExp ::
   Map Text v ->
   ExpansionMap m
 mapExp vf obj = assocsExp vf (Map.toList obj)
+
+-- * Booleans
 
 ifElse ::
   forall t m.
@@ -152,25 +112,7 @@ ifElse cond node = do
     else liftNodes no
 {-# INLINEABLE ifElse #-}
 
-switchCases :: forall m. Text -> ExpansionMap m
-switchCases tag =
-  "case" #* \(caseNode :: t) -> do
-    attrs <- attributes @t caseNode
-    withoutExpansions ["case"] $
-      if Just tag == getSingleAttr "tag" attrs
-        then liftChildren caseNode
-        else pure []
-{-# INLINEABLE switchCases #-}
-
-switch ::
-  forall m t.
-  GlobalConstraints m t =>
-  Text ->
-  Expansion m t
-switch tag node =
-  liftChildren node
-    `binding` switchCases tag
-{-# INLINEABLE switch #-}
+-- * Text
 
 switchWithDefault ::
   forall m t.
@@ -187,101 +129,3 @@ switchWithDefault tag node = do
     pure $ liftChildren child
   where
     findM p = foldr (\x -> ifM (p x) (pure $ Just x)) (pure Nothing)
-
-ifBound :: forall t m. GlobalConstraints m t => Expansion m t
-ifBound node = do
-  attrs <- fst <<$>> attributes node
-  bound <- allM exists attrs
-  ifElse bound node
-  where
-    exists n = isJust . lookupExpansion n . expansions <$> getOndimS
-
-anyBound :: forall t m. GlobalConstraints m t => Expansion m t
-anyBound node = do
-  attrs <- fst <<$>> attributes node
-  bound <- anyM exists attrs
-  ifElse bound node
-  where
-    exists n = isJust . lookupExpansion n . expansions <$> getOndimS
-
-switchBound :: forall t m. GlobalConstraints m t => Expansion m t
-switchBound node = do
-  tag <- getSingleAttr "exp" <$> attributes node
-  flip (maybe $ pure []) tag \tag' -> do
-    tagC <- fromMaybe "" <$> getTextData tag'
-    switchWithDefault tagC node
-
--- Binding
-
--- | This expansion works like Heist's `bind` splice
-bind :: HasCallStack => GlobalExpansion m
-bind node = do
-  attrs <- attributes node
-  defSite <- getCurrentSite
-  case getSingleAttr "name" attrs of
-    Just name -> do
-      putSomeExpansion name $ someExpansion' defSite $ \inner -> do
-        callSite <- getCurrentSite
-        attrs' <- attributes inner
-        withSite defSite $
-          liftChildren node
-            `binding` do
-              "caller" #. do
-                "children" ## const (withSite callSite $ liftChildren inner)
-                "attrs" #. assocsExp textData attrs'
-      pure []
-    Nothing -> throwTemplateError "No name for expansion"
-
-{- | This expansion works like Heist's `bind` splice, but binds what's inside as
-  text (via the toTxt parameter).
--}
-bindText ::
-  HasCallStack =>
-  GlobalConstraints m t =>
-  (t -> Text) ->
-  Expansion m t
-bindText toTxt self = do
-  attrs <- attributes self
-  defSite <- getCurrentSite
-  case getSingleAttr "name" attrs of
-    Just name -> do
-      putSomeExpansion name $ textMData' defSite $
-        withSite defSite $ do
-          child <- liftChildren self
-          return $ foldMap toTxt child
-      pure []
-    Nothing -> throwTemplateError "No name for expansion"
-
-{- | This expansion creates a new scope for the its children, in the sense that
- the inner state does not leak outside.
-
-  For this reason, it can be used to call other expansions with "arguments":
-
-   > <bind animal-entry>There is a <animal /> with age <age /></bind>
-   >
-   > <scope>
-   >   <bind animal>Lion</bind>
-   >   <bind age>9 years</bind>
-   >   <animal-entry />
-   > <scope/>
--}
-scope :: forall t m. GlobalConstraints m t => Expansion m t
-scope node = do
-  s <- getOndimS
-  liftChildren node <* putOndimS s
-
--- * Filters
-
--- | Substitution of !(name) in attribute text
-interpParser :: Parser Text
-interpParser = do
-  _ <- string "!("
-  s <- takeTill (== ')')
-  _ <- char ')'
-  pure s
-
-attrEdit :: Monad m => Text -> Ondim m Text
-attrEdit = streamEditT interpParser callTextData
-
-attrSub :: Monad m => MapFilter m Text
-attrSub t = mapM attrEdit =<< t

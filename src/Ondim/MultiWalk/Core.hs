@@ -14,7 +14,7 @@ import Data.HashMap.Strict qualified as Map
 import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class
-import Type.Reflection (TypeRep, eqTypeRep, typeRep, type (:~~:) (HRefl))
+import Type.Reflection (SomeTypeRep (..), TypeRep, eqTypeRep, someTypeRep, typeRep, type (:~~:) (HRefl))
 import Prelude hiding (All)
 
 -- * CanLift class
@@ -52,71 +52,81 @@ fromSomeExpansion ::
   forall a m.
   GlobalConstraints m a =>
   SomeExpansion m ->
-  Maybe (Expansion m a)
+  Either ExpansionFailure (Expansion m a)
 fromSomeExpansion (TextData _ t)
-  | Just f <- fromText = Just (const $ f <$> t)
-  | otherwise = Nothing
-fromSomeExpansion (GlobalExpansion _ e) = Just e
+  | Just f <- fromText = Right (const $ f <$> t)
+  | otherwise = Left ExpansionNoFromText
+fromSomeExpansion (GlobalExpansion _ e) = Right e
 fromSomeExpansion (SomeExpansion t _ v)
-  | Just HRefl <- t `eqTypeRep` typeRep @a = Just v
-  | otherwise = Nothing
-fromSomeExpansion Namespace {} = Nothing
+  | Just HRefl <- t `eqTypeRep` typeRep @a = Right v
+  | otherwise = Left $ ExpansionWrongType (SomeTypeRep t)
+fromSomeExpansion NamespaceData {} =
+  Left $ ExpansionWrongType (someTypeRep (Proxy @Namespace))
 
 splitExpansionKey :: Text -> [Text]
 splitExpansionKey = T.split (\c -> c /= '-' && not (isLetter c))
 
-lookupExpansion :: Text -> Expansions m -> Maybe (SomeExpansion m)
-lookupExpansion (splitExpansionKey -> keys) (Expansions e) = go keys e
+lookupExpansion :: Text -> Namespace m -> Maybe (SomeExpansion m)
+lookupExpansion (splitExpansionKey -> keys) (Namespace e) = go keys e
   where
     go [] _ = Nothing
     go [k] m = Map.lookup k m
     go (k : ks) m = case Map.lookup k m of
-      Just (Namespace (Expansions n)) -> go ks n
+      Just (NamespaceData (Namespace n)) -> go ks n
       _ -> Nothing
 
-insertExpansion :: Text -> SomeExpansion m -> Expansions m -> Expansions m
-insertExpansion (splitExpansionKey -> keys) e (Expansions es) = Expansions $ go keys es
+insertExpansion :: Text -> SomeExpansion m -> Namespace m -> Namespace m
+insertExpansion (splitExpansionKey -> keys) e (Namespace es) = Namespace $ go keys es
   where
     go [] = id
     go [k] = Map.insert k e
     go (k : ks) =
       flip Map.alter k $
-        Just . Namespace . Expansions . \case
-          Just (Namespace (Expansions n)) -> go ks n
+        Just . NamespaceData . Namespace . \case
+          Just (NamespaceData (Namespace n)) -> go ks n
           _ -> go ks mempty
 
-deleteExpansion :: Text -> Expansions m -> Expansions m
-deleteExpansion (splitExpansionKey -> keys) (Expansions es) = Expansions $ go keys es
+deleteExpansion :: Text -> Namespace m -> Namespace m
+deleteExpansion (splitExpansionKey -> keys) (Namespace es) = Namespace $ go keys es
   where
     go [] = id
     go [k] = Map.delete k
     go (k : ks) = flip Map.alter k \case
-      Just (Namespace (Expansions n)) -> Just $ Namespace $ Expansions $ go ks n
+      Just (NamespaceData (Namespace n)) ->
+        Just $ NamespaceData $ Namespace $ go ks n
       _ -> Nothing
 
 -- * Lifiting
 
-getTextData :: Monad m => Text -> Ondim m (Maybe Text)
+getTextData :: Monad m => Text -> Ondim m (Either ExpansionFailure Text)
 getTextData name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
   case mbValue of
-    Just (TextData _ text) -> Just <$> text
-    _ -> return Nothing
+    Just (TextData _ text) -> Right <$> text
+    Just _ -> return $ Left (ExpansionFailureOther "Identifier not bound to text data.")
+    Nothing -> return $ Left ExpansionNotBound
 
-getNamespace :: Monad m => Text -> Ondim m (Maybe (Expansions m))
+getNamespace ::
+  Monad m =>
+  Text ->
+  Ondim m (Either ExpansionFailure (Namespace m))
 getNamespace name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
   case mbValue of
-    Just (Namespace n) -> return $ Just n
-    _ -> return Nothing
+    Just (NamespaceData n) -> return $ Right n
+    Just _ -> return $ Left (ExpansionFailureOther "Identifier not bound to a namespace.")
+    Nothing -> return $ Left ExpansionNotBound
 
 getExpansion ::
   forall t m.
   GlobalConstraints m t =>
   Text ->
-  Ondim m (Maybe (Expansion m t))
+  Ondim m (Either ExpansionFailure (Expansion m t))
 getExpansion name = do
-  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
+  mbValue <-
+    Ondim $
+      gets $
+        maybeToRight ExpansionNotBound . lookupExpansion name . expansions
   return $ (expCtx name .) <$> (fromSomeExpansion =<< mbValue)
 {-# INLINEABLE getExpansion #-}
 
@@ -143,8 +153,8 @@ liftNode node = do
   where
     expand name =
       getExpansion name >>= \case
-        Just expansion -> expansion node
-        Nothing -> one <$> liftSubstructures node
+        Right expansion -> expansion node
+        Left e -> throwExpFailure @t name e
 {-# INLINEABLE liftNode #-}
 
 -- | Lift a list of nodes, applying filters.

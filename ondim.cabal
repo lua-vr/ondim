@@ -52,6 +52,7 @@ library
     Ondim.Extra.Exceptions
     Ondim.Extra.Expansions
     Ondim.Extra.Loading
+    Ondim.Extra.Standard
 
   other-modules:
     Ondim.MultiWalk.Basic

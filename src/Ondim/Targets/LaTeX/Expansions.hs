@@ -4,9 +4,10 @@ module Ondim.Targets.LaTeX.Expansions where
 
 
 import Ondim
-import Ondim.Extra.Exceptions (notBoundFilter)
+import Ondim.Extra.Exceptions (tryFilter)
 import Ondim.Extra.Expansions
 import Ondim.Targets.LaTeX.Instances (Node (..), escapeLaTeX)
+import Ondim.Extra.Standard (standardMap)
 
 bindDefaults ::
   forall m t.
@@ -19,17 +20,10 @@ bindDefaults st =
       "escaped" ## \(node :: Node) -> do
         t <- lookupAttr' "text" node
         return [Text $ escapeLaTeX t]
-      "ignore" #* ignore
-      "if" #* ifBound
-      "any" #* anyBound
-      "match" #* switchBound
-      "bind" #* bind
-      "scope" #* scope
-      "with" #* with
-      "open" #* open
+      standardMap
       "" ## liftChildren @Node
     `bindingFilters` do
-      "notBound" $# notBoundFilter @Node (== "sep")
+      "notBound" $# tryFilter @Node
       "sep" $* fmap (foldr go [])
          where
            go (Command "sep" _ _) (Command "sep" _ _ : xs) = Text "\n\n" : xs

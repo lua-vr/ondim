@@ -16,7 +16,7 @@ loadTemplatesDynamic ::
 loadTemplatesDynamic =
   loadTemplatesDynamic' patts ins
   where
-    patts = [((), "**/*.tpl")]
+    patts = [((), "**/*.html")]
     ins () fp text =
       either
         (throw . TemplateLoadingException)

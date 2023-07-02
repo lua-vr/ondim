@@ -2,7 +2,7 @@ module Ondim.Targets.Pandoc.Expansions where
 
 import Data.Text qualified as T
 import Ondim
-import Ondim.Extra.Expansions
+import Ondim.Extra.Standard (attrSub, bindText, standardMap)
 import Ondim.Targets.Pandoc.Instances ()
 import Text.Pandoc.Definition
 import Text.Pandoc.Walk
@@ -15,11 +15,7 @@ bindDefaults ::
 bindDefaults st =
   st
     `binding` do
-      "if" #* ifBound
-      "any" #* anyBound
-      "switch" #* switchBound
-      "bind" #* bind
-      "scope" #* scope
+      standardMap
       "bind-text" ## bindText (stringify @Block)
       "bind-text" ## bindText (stringify @Inline)
     `bindingFilters` do

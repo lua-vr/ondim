@@ -67,30 +67,30 @@ data SomeFilter m where
 -- Expansions
 
 type Expansion m t = t -> Ondim m [t]
-newtype Expansions m = Expansions {getExpansions :: HashMap Text (SomeExpansion m)}
+newtype Namespace m = Namespace {getExpansions :: HashMap Text (SomeExpansion m)}
 type GlobalExpansion m = forall a. GlobalConstraints m a => Expansion m a
 
 data SomeExpansion m where
   SomeExpansion :: TypeRep a -> DefinitionSite -> Expansion m a -> SomeExpansion m
   GlobalExpansion :: DefinitionSite -> GlobalExpansion m -> SomeExpansion m
   TextData :: DefinitionSite -> Ondim m Text -> SomeExpansion m
-  Namespace :: Expansions m -> SomeExpansion m
+  NamespaceData :: Namespace m -> SomeExpansion m
 
-instance Semigroup (Expansions m) where
-  (Expansions x) <> (Expansions y) = Expansions $ Map.unionWith f x y
+instance Semigroup (Namespace m) where
+  (Namespace x) <> (Namespace y) = Namespace $ Map.unionWith f x y
     where
-      f (Namespace n) (Namespace m) = Namespace $ n <> m
+      f (NamespaceData n) (NamespaceData m) = NamespaceData $ n <> m
       f z _ = z
 
-instance Monoid (Expansions m) where
-  mempty = Expansions mempty
+instance Monoid (Namespace m) where
+  mempty = Namespace mempty
 
 -- * State data
 
 -- | Ondim's expansion state
 data OndimState (m :: Type -> Type) = OndimState
   { -- | Named expansions
-    expansions :: Expansions m,
+    expansions :: Namespace m,
     -- | Similar to expansions, but are always applied after the expansion. The
     -- purpose of the name is just to facilitate binding/unbinding and control
     -- execution order, it respects lexicographic order on keys.
@@ -121,8 +121,34 @@ withSite site = Ondim . local (\s -> s {currentSite = site}) . unOndimT
 
 data ExceptionType
   = MaxExpansionDepthExceeded
-  | TemplateError CallStack Text
-  | ExpansionNotBound SomeTypeRep Text
+  | -- | Template errors are not meant to be catched from within the templates.
+    -- Instead, they point at user errors that are supposed to be fixed.
+    TemplateError
+      CallStack
+      -- ^ Call stack
+      Text
+      -- ^ Custom error message.
+  | -- | Expansion failures are expected in some sense.
+    ExpansionFailure
+      SomeTypeRep
+      -- ^ Type representation of the node which triggered the failure.
+      Text
+      -- ^ Identifier of the node which triggered the failure.
+      ExpansionFailure
+  deriving (Show, Exception)
+
+-- | Failures related to the expansions.
+data ExpansionFailure
+  = -- | Identifier is not a bound expansion.
+    ExpansionNotBound
+  | -- | Expansion bound under identifier has mismatched type.
+    ExpansionWrongType
+      SomeTypeRep
+      -- ^ Type representation of the expansion that is bound under the identifier.
+  | -- | Identifier is a TextData but node has undefined `fromText`.
+    ExpansionNoFromText
+  | -- | Custom failure.
+    ExpansionFailureOther Text
   deriving (Show, Exception)
 
 data OndimException = OndimException ExceptionType TraceData
@@ -133,15 +159,27 @@ throwOndim e = do
   td <- Ondim ask
   Ondim $ throwError (OndimException e td)
 
-catchOndim :: Monad m => Ondim m a -> (OndimException -> Ondim m (Maybe a)) -> Ondim m a
-catchOndim (Ondim m) c = Ondim $ catchError m \e ->
-  maybe (throwError e) pure =<< unOndimT (c e)
+catchOndim ::
+  Monad m =>
+  Ondim m a ->
+  (ExpansionFailure -> Text -> SomeTypeRep -> TraceData -> Ondim m a) ->
+  Ondim m a
+catchOndim (Ondim m) f = Ondim $ catchError m \(OndimException exc tdata) ->
+  case exc of
+    ExpansionFailure trep name e -> unOndimT $ f e name trep tdata
+    _other -> m
 
 throwTemplateError :: (HasCallStack, Monad m) => Text -> Ondim m a
 throwTemplateError t = throwOndim (TemplateError callStack t)
 
-throwNotBound :: forall t m a. (Monad m, Typeable t) => Text -> Ondim m a
-throwNotBound t = throwOndim $ ExpansionNotBound (someTypeRep (Proxy @t)) t
+throwExpFailure ::
+  forall t m a.
+  (Monad m, Typeable t) =>
+  Text ->
+  ExpansionFailure ->
+  Ondim m a
+throwExpFailure t f =
+  throwOndim $ ExpansionFailure (someTypeRep (Proxy @t)) t f
 
 -- * Combinators
 

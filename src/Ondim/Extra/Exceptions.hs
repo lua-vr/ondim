@@ -1,35 +1,26 @@
 {-# LANGUAGE RankNTypes #-}
 
-module Ondim.Extra.Exceptions where
+module Ondim.Extra.Exceptions
+  ( tryFilter,
+    tryAttrFilter,
+  ) where
 
 import Data.Text qualified as T
 import Ondim
 
-notBoundFilter :: forall t m. (Monad m, OndimNode t) => (Text -> Bool) -> Filter m t
-notBoundFilter validId (original :: t) nodes = do
+tryFilter :: forall t m. (Monad m, OndimNode t) => Filter m t
+tryFilter original nodes = do
   let attrs =
         fromRight [] $
           runIdentity $
             evalOndimT $
               attributes original
   if any (("@try" ==) . fst) attrs
-    then
-      result `catchOndim` \case
-        OndimException (ExpansionNotBound {}) _ -> return (Just [])
-        _ -> return Nothing
-    else result
-  where
-    result =
-      case identify original of
-        Just name
-          | not (validId name) ->
-              ifM (isJust <$> getExpansion @t name) nodes (throwNotBound @t name)
-        _ -> nodes
+    then nodes `catchOndim` \_ _ _ _ -> return []
+    else nodes
 
-mbAttrFilter :: Monad m => Filter m Attribute
-mbAttrFilter (k, _) x
+tryAttrFilter :: Monad m => Filter m Attribute
+tryAttrFilter (k, _) x
   | Just k' <- "?" `T.stripSuffix` k =
-      first (const k') <<$>> x `catchOndim` \case
-        OndimException (ExpansionNotBound {}) _ -> return (Just [])
-        _ -> return Nothing
+      first (const k') <<$>> x `catchOndim` \_ _ _ _ -> return []
   | otherwise = x

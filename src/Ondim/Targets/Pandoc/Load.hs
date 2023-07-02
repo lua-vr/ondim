@@ -4,7 +4,7 @@ import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Ondim
-import Ondim.Extra.Expansions (ignore)
+import Ondim.Extra.Standard (ignore)
 import Ondim.Extra.Loading
 import Ondim.Targets.Pandoc.Instances ()
 import Text.Pandoc (def, pandocExtensions, readMarkdown, readerExtensions, renderError, runPure)
