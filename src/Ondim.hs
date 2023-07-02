@@ -128,6 +128,7 @@ import Ondim.MultiWalk.Core
 import Ondim.MultiWalk.Substructure
 import Type.Reflection (typeRep)
 import Prelude hiding (All)
+import qualified Data.Text as T
 
 -- | Runs the Ondim action with a given initial state.
 evalOndimTWith ::
@@ -393,4 +394,4 @@ instance OndimNode Text where
 
 instance OndimNode Attribute where
   type ExpTypes Attribute = '[ToSpec (OneSub Text)]
-  identify = Just . fst
+  identify ~(name, _) = T.stripPrefix "e:" name
