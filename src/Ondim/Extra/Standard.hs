@@ -55,8 +55,8 @@ anyBound node = do
 matchBound :: GlobalExpansion m
 matchBound node = do
   tag <- getSingleAttr' "exp" node
-  tagC <- callTextData tag
-  switchWithDefault tagC node
+  tagC <- getTextData tag
+  switchWithDefault (rightToMaybe tagC) node
 
 ignore :: forall t m. Monad m => Expansion m t
 ignore = const $ pure []

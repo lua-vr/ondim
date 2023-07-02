@@ -124,13 +124,16 @@ ifElse cond node = do
 switchWithDefault ::
   forall m t.
   GlobalConstraints m t =>
-  Text ->
+  Maybe Text ->
   Expansion m t
 switchWithDefault tag node = do
   let els = children node
   match <- (`findM` els) \x -> do
-    caseTag <- getSingleAttr "tag" <$> attributes x
-    return $ identifiesAs ["case"] x && caseTag == Just tag
+    if identifiesAs ["case"] x
+      then do
+        caseTag <- getSingleAttr' "tag" x
+        return $ Just caseTag == tag
+      else return False
   fromMaybe (pure []) do
     child <- match <|> find (identifiesAs ["default"]) els
     pure $ liftChildren child
