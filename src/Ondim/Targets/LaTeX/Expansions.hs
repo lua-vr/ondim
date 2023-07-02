@@ -4,7 +4,6 @@ module Ondim.Targets.LaTeX.Expansions where
 
 
 import Ondim
-import Ondim.Extra.Exceptions (tryFilter)
 import Ondim.Extra.Expansions
 import Ondim.Targets.LaTeX.Instances (Node (..), escapeLaTeX)
 import Ondim.Extra.Standard (standardMap)
@@ -23,7 +22,6 @@ bindDefaults st =
       standardMap
       "" ## liftChildren @Node
     `bindingFilters` do
-      "notBound" $# tryFilter @Node
       "sep" $* fmap (foldr go [])
          where
            go (Command "sep" _ _) (Command "sep" _ _ : xs) = Text "\n\n" : xs

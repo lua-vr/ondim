@@ -1,7 +1,7 @@
 module Ondim.Targets.Whiskers.Expansions where
 
 import Ondim
-import Ondim.Extra.Exceptions (tryAttrFilter, tryFilter)
+import Ondim.Extra.Exceptions (tryAttrFilter)
 import Ondim.Extra.Standard (attrSub, standardMap)
 import Ondim.Targets.Whiskers.Instances (Node)
 
@@ -18,4 +18,3 @@ bindDefaults st =
     `bindingFilters` do
       "attrSub" $* attrSub
       "tryAttr" $# tryAttrFilter
-      "try" $# tryFilter @Node

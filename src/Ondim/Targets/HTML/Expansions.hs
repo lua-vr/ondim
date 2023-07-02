@@ -1,7 +1,7 @@
 module Ondim.Targets.HTML.Expansions where
 
 import Ondim
-import Ondim.Extra.Exceptions (tryAttrFilter, tryFilter)
+import Ondim.Extra.Exceptions (tryAttrFilter)
 import Ondim.Extra.Expansions
 import Ondim.Targets.HTML.Instances
 import qualified Text.XmlHtml as X
@@ -25,8 +25,6 @@ bindDefaults st =
           parsed <- rightToMaybe $ X.parseHTML "" (encodeUtf8 t)
           return $ liftNodes $ fromNodeList $ X.docContent parsed
       "bind-text" ## bindText nodeText
-      "@try" ## const $ pure ([] :: [Attribute])
     `bindingFilters` do
       "attrSub" $* attrSub
       "tryAttr" $# tryAttrFilter
-      "try" $# tryFilter @HtmlNode
