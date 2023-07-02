@@ -55,6 +55,13 @@ listList ::
   Expansion m t
 listList f list node = do
   alias <- fromMaybe "this" <$> lookupAttr "as" node
+  expansion <- do
+    expName <- lookupAttr "with" node
+    case expName of
+      Just name -> do
+        exps <- getExpansion name
+        either (throwExpFailure @t name) return exps
+      Nothing -> return liftChildren
   intercalateWith <- lookupAttr "intercalate" node
   let inter txt
         | Just ft <- fromText @t = intercalate (ft txt)
@@ -62,7 +69,7 @@ listList f list node = do
       join' = maybe join inter intercalateWith
   withSomeExpansion alias Nothing $
     join' <$> forM list \el ->
-      liftChildren node
+      expansion node
         `binding` do alias #: f el
 
 -- * Assocs and maps
