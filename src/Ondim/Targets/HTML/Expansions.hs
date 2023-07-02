@@ -15,17 +15,16 @@ bindDefaults ::
 bindDefaults st =
   st
     `binding` do
-      "o" #. do
-        standardMap
-        "raw" ## \(node :: HtmlNode) -> do
-          t <- lookupAttr' "text" node
-          return [rawNode t]
-        "expanded" ## \(node :: HtmlNode) -> do
-          t <- lookupAttr' "text" node
-          fromMaybe (pure []) do
-            parsed <- rightToMaybe $ X.parseHTML "" (encodeUtf8 t)
-            return $ liftNodes $ fromNodeList $ X.docContent parsed
-        "bind-text" ## bindText nodeText
+      standardMap
+      "raw" ## \(node :: HtmlNode) -> do
+        t <- lookupAttr' "text" node
+        return [rawNode t]
+      "expanded" ## \(node :: HtmlNode) -> do
+        t <- lookupAttr' "text" node
+        fromMaybe (pure []) do
+          parsed <- rightToMaybe $ X.parseHTML "" (encodeUtf8 t)
+          return $ liftNodes $ fromNodeList $ X.docContent parsed
+      "bind-text" ## bindText nodeText
       "@try" ## const $ pure ([] :: [Attribute])
     `bindingFilters` do
       "attrSub" $* attrSub
