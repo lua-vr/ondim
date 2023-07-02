@@ -60,6 +60,8 @@ fromSomeExpansion (GlobalExpansion _ e) = Right e
 fromSomeExpansion (SomeExpansion t _ v)
   | Just HRefl <- t `eqTypeRep` typeRep @a = Right v
   | otherwise = Left $ ExpansionWrongType (SomeTypeRep t)
+fromSomeExpansion (NamespaceData (Namespace n))
+  | Just v <- Map.lookup "" n = fromSomeExpansion v
 fromSomeExpansion NamespaceData {} =
   Left $ ExpansionWrongType (someTypeRep (Proxy @Namespace))
 
