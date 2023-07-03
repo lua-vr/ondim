@@ -46,12 +46,15 @@ module Ondim
     evalOndimT,
 
     -- * Exceptions
+    TraceData (..),
     ExceptionType (..),
     OndimException (..),
     throwTemplateError,
+    throwException,
+    catchException,
     ExpansionFailure (..),
     throwExpFailure,
-    catchOndim,
+    catchFailure,
     DefinitionSite (..),
     getCurrentSite,
     callStackSite,

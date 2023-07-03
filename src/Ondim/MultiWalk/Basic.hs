@@ -107,7 +107,7 @@ instance Semigroup (OndimState m) where
 -- * Exceptions
 
 -- | Data used for debugging purposes
-data TraceData = TraceData {depth :: Int, expansionTrace :: [Text], currentSite :: DefinitionSite}
+data TraceData = TraceData {depth :: Int, expansionTrace :: [(Text, DefinitionSite)], currentSite :: DefinitionSite}
   deriving (Eq, Show)
 
 initialTraceData :: TraceData
@@ -154,23 +154,30 @@ data ExpansionFailure
 data OndimException = OndimException ExceptionType TraceData
   deriving (Show, Exception)
 
-throwOndim :: Monad m => ExceptionType -> Ondim m a
-throwOndim e = do
+catchException ::
+  Monad m =>
+  Ondim m a ->
+  (OndimException -> Ondim m a) ->
+  Ondim m a
+catchException (Ondim m) f = Ondim $ catchError m (unOndimT . f)
+
+throwException :: Monad m => ExceptionType -> Ondim m a
+throwException e = do
   td <- Ondim ask
   Ondim $ throwError (OndimException e td)
 
-catchOndim ::
+throwTemplateError :: (HasCallStack, Monad m) => Text -> Ondim m a
+throwTemplateError t = throwException (TemplateError callStack t)
+
+catchFailure ::
   Monad m =>
   Ondim m a ->
   (ExpansionFailure -> Text -> SomeTypeRep -> TraceData -> Ondim m a) ->
   Ondim m a
-catchOndim (Ondim m) f = Ondim $ catchError m \(OndimException exc tdata) ->
+catchFailure (Ondim m) f = Ondim $ catchError m \(OndimException exc tdata) ->
   case exc of
     ExpansionFailure trep name e -> unOndimT $ f e name trep tdata
     _other -> m
-
-throwTemplateError :: (HasCallStack, Monad m) => Text -> Ondim m a
-throwTemplateError t = throwOndim (TemplateError callStack t)
 
 throwExpFailure ::
   forall t m a.
@@ -179,7 +186,7 @@ throwExpFailure ::
   ExpansionFailure ->
   Ondim m a
 throwExpFailure t f =
-  throwOndim $ ExpansionFailure (someTypeRep (Proxy @t)) t f
+  throwException $ ExpansionFailure (someTypeRep (Proxy @t)) t f
 
 -- * Combinators
 

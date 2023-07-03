@@ -52,13 +52,13 @@ fromSomeExpansion ::
   forall a m.
   GlobalConstraints m a =>
   SomeExpansion m ->
-  Either ExpansionFailure (Expansion m a)
-fromSomeExpansion (TextData _ t)
-  | Just f <- fromText = Right (const $ f <$> t)
+  Either ExpansionFailure (Expansion m a, DefinitionSite)
+fromSomeExpansion (TextData site t)
+  | Just f <- fromText = Right (const $ f <$> t, site)
   | otherwise = Left ExpansionNoFromText
-fromSomeExpansion (GlobalExpansion _ e) = Right e
-fromSomeExpansion (SomeExpansion t _ v)
-  | Just HRefl <- t `eqTypeRep` typeRep @a = Right v
+fromSomeExpansion (GlobalExpansion site e) = Right (e, site)
+fromSomeExpansion (SomeExpansion t site v)
+  | Just HRefl <- t `eqTypeRep` typeRep @a = Right (v, site)
   | otherwise = Left $ ExpansionWrongType (SomeTypeRep t)
 fromSomeExpansion (NamespaceData (Namespace n))
   | Just v <- Map.lookup "" n = fromSomeExpansion v
@@ -125,11 +125,11 @@ getExpansion ::
   Text ->
   Ondim m (Either ExpansionFailure (Expansion m t))
 getExpansion name = do
-  mbValue <-
-    Ondim $
-      gets $
-        maybeToRight ExpansionNotBound . lookupExpansion name . expansions
-  return $ (expCtx name .) <$> (fromSomeExpansion =<< mbValue)
+  mbValue <- Ondim $ gets $ lookupExpansion name . expansions
+  return do
+    value <- maybeToRight ExpansionNotBound mbValue
+    (expansion, site) <- fromSomeExpansion value
+    return $ expCtx name site . expansion
 {-# INLINEABLE getExpansion #-}
 
 {- | This function recursively lifts the nodes into an unvaluated state, that will
@@ -193,10 +193,21 @@ modSubLift ::
 modSubLift = HS.modSub @OCTag @GSubTag @ls @t (Proxy @CanLift) (\(_ :: Proxy s) -> liftSub @s)
 {-# INLINEABLE modSubLift #-}
 
-expCtx :: forall m a. Monad m => Text -> Ondim m a -> Ondim m a
-expCtx name (Ondim ctx) = do
+expCtx :: forall m a. Monad m => Text -> DefinitionSite -> Ondim m a -> Ondim m a
+expCtx name site (Ondim ctx) = do
   gst <- Ondim ask
   if depth gst >= 200
     then -- To avoid recursive expansions
-      throwOndim MaxExpansionDepthExceeded
-    else Ondim $ local (\s -> s {depth = depth s + 1, expansionTrace = name : expansionTrace s}) ctx
+      throwException MaxExpansionDepthExceeded
+    else
+      Ondim $
+        local
+          ( \s ->
+              s
+                { depth = depth s + 1,
+                  expansionTrace =
+                    (name, site)
+                      : expansionTrace s
+                }
+          )
+          ctx
