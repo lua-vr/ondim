@@ -17,6 +17,7 @@ import Data.Attoparsec.Text (Parser, char, string, takeTill)
 import Ondim
 import Ondim.Extra.Expansions
 import Replace.Attoparsec.Text (streamEditT)
+import Ondim.Extra.Exceptions (tryExp)
 
 standardMap :: ExpansionMap m
 standardMap = do
@@ -24,6 +25,7 @@ standardMap = do
   "if" #* ifBound
   "any" #* anyBound
   "match" #* matchBound
+  "try" #* tryExp
   "ignore" #* ignore
   -- Environment
   "open" #* open

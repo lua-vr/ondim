@@ -1,7 +1,8 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Ondim.Extra.Exceptions
-  ( tryAttrFilter,
+  ( tryExp,
+    tryAttrFilter,
     exceptionExp,
     prettyException,
   ) where
@@ -9,6 +10,9 @@ module Ondim.Extra.Exceptions
 import Data.Text qualified as T
 import Ondim
 import Ondim.Extra.Expansions (listExp)
+
+tryExp :: Monad m => GlobalExpansion m
+tryExp node = liftChildren node `catchFailure` \_ _ _ _ -> return []
 
 tryAttrFilter :: Monad m => Filter m Attribute
 tryAttrFilter (k, _) x
