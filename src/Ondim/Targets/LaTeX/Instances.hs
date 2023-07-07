@@ -40,6 +40,7 @@ instance OndimNode Node where
       '[ ToSpec (Trav [] Node),
          ToSpec Node
        ]
+  children = specChildren
   attributes (Command _ pairs _) =
     forM pairs \(k, v) ->
       liftM2

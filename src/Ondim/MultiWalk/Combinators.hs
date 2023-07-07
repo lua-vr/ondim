@@ -7,30 +7,32 @@ module Ondim.MultiWalk.Combinators
     SubSpec (..),
     SelSpec (..),
     -- Combinators
-    Under,
+    Nesting,
     MatchWith,
     Conversible (..),
     Converting,
     Trav,
     OneSub,
+    Sequence,
   )
 where
 
-import Control.MultiWalk.HasSub (GSubTag, SelSpec, SubSpec (..))
+import Control.MultiWalk.HasSub (SelSpec, SubSpec (..), AllMods)
 import Control.MultiWalk.HasSub qualified as HS
 import Ondim.MultiWalk.Basic
+import Ondim.MultiWalk.Class (OndimNode (..))
 import Ondim.MultiWalk.Core
 import Ondim.MultiWalk.Substructure
 
 type family CombinatorCarrier (b :: Type) :: Type where
-  CombinatorCarrier (Under b s a) = b
-  CombinatorCarrier (MatchWith s a) = s
+  CombinatorCarrier (Nesting b) = b
+  CombinatorCarrier (MatchWith s _) = s
   CombinatorCarrier (OneSub a) = a
   CombinatorCarrier (Trav f a) = f (Carrier a)
-  CombinatorCarrier (Converting b a) = b
+  CombinatorCarrier (Converting b _) = b
+  CombinatorCarrier (Sequence a _) = Carrier a
   CombinatorCarrier a = [a]
 
-type instance HS.Carrier OCTag a = CombinatorCarrier a
 type instance HS.Carrier OCTag a = CombinatorCarrier a
 
 -- Definitions
@@ -55,7 +57,6 @@ instance
   Substructure s (MatchWith b a)
   where
   getSubs = getSubs @s @a . coerce
-  modSubs f = fmap coerce . modSubs @s @a f . coerce
 
 {- | If your type is not within a list but is a monoid, you can use this and
 pretend it's a list.
@@ -79,7 +80,6 @@ instance
   Substructure k (OneSub a)
   where
   getSubs = getSubs @k @a . one
-  modSubs f (x :: a) = mconcat <$> modSubs @k @a f [x]
 
 -- | Use this for matching with a type inside a traversable functor.
 data Trav (f :: Type -> Type) (a :: Type)
@@ -99,29 +99,24 @@ instance
   Substructure s (Trav f a)
   where
   getSubs = foldMap (getSubs @s @a)
-  modSubs f = traverse (modSubs @s @a f)
 
-{- | Use this for matching a subcomponent nested inside another type. Useful if
-you don't want to add the middle type to the list of expansible types.
--}
-data Under (b :: Type) (s :: SelSpec) (a :: Type)
+-- | Use this for matching a subcomponent nested inside another type.
+data Nesting (b :: Type)
 
 instance
-  ( CanLift a,
-    HasSub GSubTag '[ 'SubSpec s a (Carrier a)] b
+  ( OndimNode b
   ) =>
-  CanLift (Under b s a)
+  CanLift (Nesting b)
   where
-  liftSub = modSubLift @'[ 'SubSpec s a (Carrier a)]
+  liftSub = liftSubstructures
 
 instance
-  ( Substructure k a,
-    HasSub GSubTag '[ 'SubSpec s a (Carrier a)] b
+  ( OndimNode b,
+    AllMods (Substructure k) (ExpTypes b)
   ) =>
-  Substructure k (Under b s a)
+  Substructure k (Nesting b)
   where
-  getSubs = getSubstructure' @k @'[ 'SubSpec s a (Carrier a)]
-  modSubs = modSubstructureM' @k @'[ 'SubSpec s a (Carrier a)]
+  getSubs = getSubstructure
 
 data Converting a b
 
@@ -144,4 +139,23 @@ instance
   Substructure k (Converting s a)
   where
   getSubs = getSubs @k @a . convertTo
-  modSubs f x = fmap (updateFrom x) $ modSubs @k @a f $ convertTo x
+
+data Sequence a b
+
+instance
+  ( Carrier a ~ Carrier b,
+    CanLift a,
+    CanLift b
+  ) =>
+  CanLift (Sequence a b)
+  where
+  liftSub = liftSub @a >=> liftSub @b
+
+instance
+  ( Carrier a ~ Carrier b,
+    Substructure k a,
+    Substructure k b
+  ) =>
+  Substructure k (Sequence a b)
+  where
+  getSubs x = getSubs @k @a x <> getSubs @k @b x

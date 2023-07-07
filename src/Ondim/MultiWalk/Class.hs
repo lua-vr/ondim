@@ -7,14 +7,12 @@ module Ondim.MultiWalk.Class where
 import Control.MultiWalk.HasSub (AllMods, GSubTag, SubSpec)
 import Ondim.MultiWalk.Basic
 import {-# SOURCE #-} Ondim.MultiWalk.Core
-import {-# SOURCE #-} Ondim.MultiWalk.Substructure
 
 -- * Class
 
 class
   ( HasSub GSubTag (ExpTypes t) t,
     AllMods CanLift (ExpTypes t),
-    AllMods (Substructure t) (ExpTypes t),
     Typeable t
   ) =>
   OndimNode t
@@ -26,3 +24,5 @@ class
   fromText = Nothing
   attributes :: Monad m => t -> Ondim m [Attribute]
   attributes _ = pure []
+  children :: t -> [t]
+  children _ = []

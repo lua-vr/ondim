@@ -105,11 +105,9 @@ module Ondim
 
     -- * Structure
     getSubstructure,
-    modSubstructure,
-    modSubstructureM,
-    children,
     liftChildren,
-    substructureAttributes,
+    specChildren,
+    specAttributes,
     lookupAttr,
 
     -- * Auxiliary
@@ -124,6 +122,7 @@ import Control.MultiWalk.HasSub (AllMods)
 import Data.HashMap.Strict qualified as HMap
 import Data.List qualified as L
 import Data.Map qualified as Map
+import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class
 import Ondim.MultiWalk.Combinators
@@ -131,7 +130,6 @@ import Ondim.MultiWalk.Core
 import Ondim.MultiWalk.Substructure
 import Type.Reflection (typeRep)
 import Prelude hiding (All)
-import qualified Data.Text as T
 
 -- | Runs the Ondim action with a given initial state.
 evalOndimTWith ::
@@ -332,14 +330,6 @@ bindingFilters o filts =
 
 -- Children
 
-children ::
-  forall t.
-  ( OndimNode t
-  ) =>
-  t ->
-  [t]
-children = getSubstructure @t
-
 liftChildren ::
   forall t m.
   ( OndimNode t,
@@ -348,11 +338,18 @@ liftChildren ::
   Expansion m t
 liftChildren = liftNodes . children
 
+-- | You can use this as a default instance for the 'children' class method.
+specChildren ::
+  (OndimNode t, AllMods (Substructure t) (ExpTypes t)) =>
+  t ->
+  [t]
+specChildren = getSubstructure
+
 -- Attributes
 
 -- | You can use this as a default instance for the 'attributes' class method.
-substructureAttributes :: (OndimNode t, AllMods (Substructure Attribute) (ExpTypes t), Monad m) => t -> Ondim m [Attribute]
-substructureAttributes = liftNodes . getSubstructure @Attribute
+specAttributes :: (OndimNode t, AllMods (Substructure Attribute) (ExpTypes t), Monad m) => t -> Ondim m [Attribute]
+specAttributes = liftNodes . getSubstructure @Attribute
 
 lookupAttr ::
   (Monad m, OndimNode t) =>

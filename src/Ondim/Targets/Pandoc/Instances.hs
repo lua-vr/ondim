@@ -17,6 +17,12 @@ instance OndimNode Pandoc where
       '[ ToSpec Block
        ]
 
+instance OndimNode ([Inline], [[Block]]) where
+  type ExpTypes ([Inline], [[Block]]) =
+    '[ ToSpec Inline,
+       ToSpec (Trav [] Block)
+     ]
+
 instance OndimNode Block where
   type
     ExpTypes Block =
@@ -24,15 +30,15 @@ instance OndimNode Block where
          ToSpec (Trav [] Inline),
          ToSpec Block,
          ToSpec (Trav [] Block),
-         ToSpec (Under ([Inline], [[Block]]) 'NoSel Inline),
-         ToSpec (Trav ((,) [Inline]) (Trav [] Block)),
+         ToSpec (Nesting ([Inline], [[Block]])),
          ToSpec (Converting Attr Attribute),
          ToSpec (OneSub Text)
        ]
   identify (Div (_, n, _) _) =  getId n
   identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
-  attributes = substructureAttributes
+  children = specChildren
+  attributes = specAttributes
 
 instance OndimNode Inline where
   type
@@ -40,13 +46,13 @@ instance OndimNode Inline where
       '[ ToSpec Inline,
          ToSpec Block,
          ToSpec (Converting Attr Attribute),
-         ToSpec (OneSub Text),
-         ToSpec Attribute
+         ToSpec (OneSub Text)
        ]
   identify (Span (_, n, _) _) = getId n
   identify _ = Nothing
   fromText = Just (toList . B.text)
-  attributes = substructureAttributes
+  children = specChildren
+  attributes = specAttributes
 
 instance Conversible Attr [Attribute] where
   convertTo (x, y, z) =

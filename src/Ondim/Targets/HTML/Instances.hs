@@ -5,7 +5,7 @@ module Ondim.Targets.HTML.Instances where
 
 import Data.Char (isSpace)
 import Data.Text qualified as T
-import Ondim (Attribute, OndimNode (..), OneSub, ToSpec, ToSpecSel, SelSpec (..), Converting, Conversible (..), substructureAttributes)
+import Ondim
 import Text.XmlHtml qualified as X
 
 {- | We use a new XML datatype so that we can group the node with the newline space
@@ -68,7 +68,8 @@ instance OndimNode HtmlNode where
   identify (Element _ name _ _) = T.stripPrefix  "e:" name
   identify _ = Nothing
   fromText = Just (one . TextNode)
-  attributes = substructureAttributes
+  children = specChildren
+  attributes = specAttributes
 
 -- | A hack, unfortunately.
 rawNode :: Text -> HtmlNode

@@ -24,7 +24,8 @@ instance OndimNode Node where
       '[ ToSpec Attribute,
          ToSpec Node
        ]
-  attributes = substructureAttributes
+  children = specChildren
+  attributes = specAttributes
   identify = \case
     Section t _ _ -> Just t
     Single t _ -> Just t

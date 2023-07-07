@@ -183,7 +183,7 @@ liftSubstructures = modSubLift @(ExpTypes t)
 -- * Lifting functions
 
 modSubLift ::
-  forall ls m t.
+  forall ls t m.
   ( Monad m,
     HasSub GSubTag ls t,
     AllMods CanLift ls
