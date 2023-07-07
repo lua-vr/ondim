@@ -27,7 +27,7 @@ bindDefaults st =
           return $ liftNodes $ fromNodeList $ X.docContent parsed
       "bind-text" ## bindText nodeText
     `bindingFilters` do
-      "attrSub" $* attrSub
+      "attrSub" $* attrSub '$' ('{', '}')
       "tryAttr" $# tryAttrFilter
 
 expandHtml ::

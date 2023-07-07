@@ -18,7 +18,7 @@ bindDefaults st =
       standardMap
       "" ## liftChildren @Node
     `bindingFilters` do
-      "attrSub" $* attrSub
+      "attrSub" $* attrSub '$' ('{', '}')
       "tryAttr" $# tryAttrFilter
 
 expandWhiskers ::
