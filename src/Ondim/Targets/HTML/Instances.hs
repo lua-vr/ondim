@@ -56,7 +56,7 @@ instance OndimNode X.Document where
 
 instance Conversible [X.Node] [HtmlNode] where
   convertTo = fromNodeList
-  convertFrom = toNodeList
+  updateFrom _ = toNodeList
 
 instance OndimNode HtmlNode where
   type

@@ -53,7 +53,7 @@ instance Conversible Attr [Attribute] where
     ("id", x)
       : ("class", T.intercalate " " (filter (not . T.isPrefixOf "e:") y))
       : z
-  convertFrom = foldMap go
+  updateFrom _ = foldMap go
     where
       go ("id", a) = (a, [], [])
       go ("class", a) = ("", T.split (' ' ==) a, [])

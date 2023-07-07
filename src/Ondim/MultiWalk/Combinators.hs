@@ -127,7 +127,7 @@ data Converting a b
 
 class Conversible a b where
   convertTo :: a -> b
-  convertFrom :: b -> a
+  updateFrom :: a -> b -> a
 
 instance
   ( CanLift a,
@@ -135,7 +135,7 @@ instance
   ) =>
   CanLift (Converting s a)
   where
-  liftSub = fmap convertFrom . liftSub @a . convertTo
+  liftSub x = fmap (updateFrom x) $ liftSub @a $ convertTo x
 
 instance
   ( Substructure k a,
@@ -144,4 +144,4 @@ instance
   Substructure k (Converting s a)
   where
   getSubs = getSubs @k @a . convertTo
-  modSubs f = fmap convertFrom . modSubs @k @a f . convertTo
+  modSubs f x = fmap (updateFrom x) $ modSubs @k @a f $ convertTo x
