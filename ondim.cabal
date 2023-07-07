@@ -48,7 +48,6 @@ library
   -- LANGUAGE extensions used by modules in this package.
   exposed-modules:
     Ondim
-    Ondim.Extra
     Ondim.Extra.Exceptions
     Ondim.Extra.Expansions
     Ondim.Extra.Loading
