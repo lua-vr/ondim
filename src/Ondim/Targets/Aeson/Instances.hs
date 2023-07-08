@@ -38,5 +38,5 @@ instance OndimNode Value where
     | Just Refl <- eqT @t @Text = Just \case
         String t -> [t]
         _notString -> mempty
-    | Just Refl <- eqT @t @Rendered = Just $ one . RenderedLBS . encode
+    | Just Refl <- eqT @t @Rendered = Just $ one . encode
     | otherwise = Nothing

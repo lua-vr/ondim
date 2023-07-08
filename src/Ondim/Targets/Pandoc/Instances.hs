@@ -18,7 +18,7 @@ getId = asum . map (T.stripPrefix "e:")
 instance OndimNode Pandoc where
   type ExpTypes Pandoc = '[ToSpec Block, ToSpec (Nesting Meta)]
   castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Rendered = Just $ one . RenderedLBS . encode
+    | Just Refl <- eqT @t @Rendered = Just $ one . encode
     | otherwise = Nothing
 
 instance OndimNode Meta where

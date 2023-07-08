@@ -27,7 +27,7 @@ instance L.ToHtml HtmlDocument where
 instance OndimNode HtmlDocument where
   type ExpTypes HtmlDocument = '[ToSpec (Nesting HtmlElement)]
   castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Rendered = Just $ one . RenderedLBS . L.renderBS . L.toHtml
+    | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
     | otherwise = Nothing
 
 {- | We use a new XML datatype so that we can group the node with the newline space
@@ -68,7 +68,7 @@ instance L.ToHtml HtmlElement where
 instance OndimNode HtmlElement where
   type ExpTypes HtmlElement = '[ToSpec Attribute, ToSpec HtmlNode]
   castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Rendered = Just $ one . RenderedLBS . L.renderBS . L.toHtml
+    | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
     | otherwise = Nothing
 
 data HtmlNode
@@ -118,7 +118,7 @@ instance OndimNode HtmlNode where
     | otherwise = Nothing
   castTo (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . toStrict . L.renderText . L.toHtml
-    | Just Refl <- eqT @t @Rendered = Just $ one . RenderedLBS . L.renderBS . L.toHtml
+    | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
     | otherwise = Nothing
 
 rawNode :: Text -> HtmlNode

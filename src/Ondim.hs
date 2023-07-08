@@ -31,8 +31,8 @@ module Ondim
     evalOndimT,
 
     -- * Rendering
-    Rendered (..),
-    renderedToText,
+    Rendered,
+    renderNode,
 
     -- * Exceptions
     TraceData (..),
@@ -130,16 +130,13 @@ liftChildren ::
   Expansion m t
 liftChildren = liftNodes . children
 
-data Rendered
-  = RenderedBS ByteString
-  | RenderedLBS LByteString
-  | RenderedText Text
+type Rendered = LByteString
 
-renderedToText :: Rendered -> Text
-renderedToText = \case
-  RenderedBS t -> decodeUtf8 t
-  RenderedLBS t -> decodeUtf8 t
-  RenderedText t -> t
+renderNode :: (HasCallStack, Monad m) => OndimNode a => a -> Ondim m Rendered
+renderNode =
+  case castTo Proxy of
+    Just render -> return . mconcat . render
+    Nothing -> const $ throwTemplateError "This type cannot be rendered."
 
 -- | You can use this as a default instance for the 'children' class method.
 specChildren ::

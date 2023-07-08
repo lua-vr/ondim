@@ -158,7 +158,7 @@ renderExp f node = do
           case castFrom Proxy of
             Just cast -> do
               x' <- liftSubstructures x
-              let t = foldMap' renderedToText $ render x'
+              let t = foldMap' (decodeUtf8 @Text @Rendered) (render x')
               return $ cast t
             Nothing -> noCast
         Nothing -> noRender
