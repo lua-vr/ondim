@@ -1,9 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-{-# LANGUAGE InstanceSigs #-}
 
-module Ondim.MultiWalk.Class where
+module Ondim.MultiWalk.Class (OndimNode (..), ondimCast) where
 
 import Control.MultiWalk.HasSub (AllMods, GSubTag, SubSpec)
 import Ondim.MultiWalk.Basic
@@ -33,14 +32,5 @@ class
 instance OndimNode Text where
   type ExpTypes Text = '[]
 
-class Typeable a => OndimCast a where
-  ondimCast :: OndimNode b => Maybe (a -> [b])
-
-instance {-# OVERLAPPABLE #-} (OndimNode a, Typeable a) => OndimCast a where
-  ondimCast :: forall b. OndimNode b => Maybe (a -> [b])
-  ondimCast = castFrom (Proxy @a) <|> castTo (Proxy @b)
-
-instance OndimCast a => OndimCast [a] where
-  ondimCast = do
-    f <- ondimCast @a
-    return (foldMap f)
+ondimCast :: forall a b. (OndimNode a, OndimNode b) => Maybe (a -> [b])
+ondimCast = castFrom (Proxy @a) <|> castTo (Proxy @b)

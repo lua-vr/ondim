@@ -64,7 +64,7 @@ listList f list node = do
       Nothing -> return liftChildren
   intercalateWith <- lookupAttr "intercalate" node
   let inter txt
-        | Just cast <- ondimCast = intercalate (cast txt)
+        | Just cast <- castFrom Proxy = intercalate (cast txt)
         | otherwise = join
       join' = maybe join inter intercalateWith
   withSomeExpansion alias Nothing $
@@ -137,3 +137,28 @@ switchWithDefault tag node = do
     pure $ liftChildren child
   where
     findM p = foldr (\x -> ifM (p x) (pure $ Just x)) (pure Nothing)
+
+renderExp ::
+  forall m a b.
+  (HasCallStack,
+   GlobalConstraints m a,
+   OndimNode b
+  ) =>
+  (Text -> Either String b) ->
+  Expansion m a
+renderExp f node = do
+  parsed <- f <$> lookupAttr' "text" node
+  either (throwTemplateError . toText) convert parsed
+  where
+    noRender = throwTemplateError "source is missing cast to rendered!"
+    noCast = throwTemplateError "target is missing cast from text!"
+    convert x = do
+      case castTo Proxy of
+        Just render ->
+          case castFrom Proxy of
+            Just cast -> do
+              x' <- liftSubstructures x
+              let t = foldMap' renderedToText $ render x'
+              return $ cast t
+            Nothing -> noCast
+        Nothing -> noRender

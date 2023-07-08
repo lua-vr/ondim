@@ -19,7 +19,7 @@ loadTemplatesDynamic' ::
   -- | Patterns to look for.
   [(tplTypes, FilePattern)] ->
   -- | Insertion
-  (tplTypes -> FilePath -> ByteString -> SomeExpansion n) ->
+  (tplTypes -> FilePath -> LByteString -> SomeExpansion n) ->
   -- | Places to look for templates, in descending order of priority.
   [FilePath] ->
   m (OndimState n, (OndimState n -> m ()) -> m ())
@@ -38,6 +38,6 @@ loadTemplatesDynamic' patts ins places =
                     Refresh _ ls ->
                       let dir = snd $ minimumOn1 fst (fst <$> ls)
                           fp = dir </> file
-                       in readFileBS fp <&> \b s -> s {expansions = insertExpansion name (ins tplType fp b) (expansions s)}
+                       in readFileLBS fp <&> \b s -> s {expansions = insertExpansion name (ins tplType fp b) (expansions s)}
                     Delete -> pure \s -> s {expansions = deleteExpansion name (expansions s)}
    in unionMount sources patterns exclude initial handler

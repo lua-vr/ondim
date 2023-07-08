@@ -87,18 +87,22 @@ library
       , scientific
 
   if flag(with-pandoc)
+    build-depends:
+      , pandoc
+      , pandoc-types
+
     exposed-modules:
       Ondim.Targets.Pandoc
       Ondim.Targets.Pandoc.Expansions
       Ondim.Targets.Pandoc.Instances
       Ondim.Targets.Pandoc.Load
 
-    build-depends:
-      , pandoc
-      , pandoc-types
-
   if flag(with-html)
-    build-depends:   xmlhtml
+    build-depends:
+      , html-conduit
+      , lucid
+      , xml-conduit
+
     exposed-modules:
       Ondim.Targets.HTML
       Ondim.Targets.HTML.Expansions

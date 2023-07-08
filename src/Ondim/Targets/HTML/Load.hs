@@ -1,12 +1,12 @@
 module Ondim.Targets.HTML.Load where
 
-import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, NoLoggingT (runNoLoggingT))
 import Ondim
 import Ondim.Extra.Loading
 import Ondim.Targets.HTML.Instances
-import Text.XmlHtml qualified as X
+import Text.HTML.DOM qualified as HTML
+import Text.XML qualified as X
 
 loadTemplatesDynamic ::
   forall m n.
@@ -18,10 +18,7 @@ loadTemplatesDynamic =
   where
     patts = [((), "**/*.html")]
     ins () fp text =
-      either
-        (throw . TemplateLoadingException)
-        (fromDocument $ FileDefinition fp)
-        (X.parseHTML fp text)
+       fromDocument (FileDefinition fp) (HTML.parseLBS text)
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimState n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
@@ -29,4 +26,4 @@ loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
 -- * Template loading helpers
 
 fromDocument :: Monad m => DefinitionSite -> X.Document -> SomeExpansion m
-fromDocument site = templateData' site . fromNodeList . X.docContent
+fromDocument site = templateData' site . toHtmlDocument
