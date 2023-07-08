@@ -76,18 +76,19 @@ library
     , unordered-containers
 
   if flag(with-json)
+    build-depends:
+      , aeson
+      , scientific
+
     exposed-modules:
       Ondim.Extra.BindJSON
       Ondim.Targets.Aeson
       Ondim.Targets.Aeson.Expansions
       Ondim.Targets.Aeson.Instances
 
-    build-depends:
-      , aeson
-      , scientific
-
   if flag(with-pandoc)
     build-depends:
+      , aeson
       , pandoc
       , pandoc-types
 

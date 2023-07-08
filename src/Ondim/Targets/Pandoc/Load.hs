@@ -4,17 +4,13 @@ import Control.Exception (throw)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Ondim
-import Ondim.Extra.Standard (ignore)
 import Ondim.Extra.Loading
 import Ondim.Targets.Pandoc.Instances ()
-import Text.Pandoc (def, pandocExtensions, readMarkdown, readerExtensions, renderError, runPure)
-import Text.Pandoc.Definition
-
-data TemplateType
-  = InlineTpl
-  | BlockTpl
-  -- ...add more?
-  deriving (Eq, Ord)
+import Text.Pandoc.Class (runPure)
+import Text.Pandoc.Error (renderError)
+import Text.Pandoc.Extensions (pandocExtensions)
+import Text.Pandoc.Options (def, readerExtensions)
+import Text.Pandoc.Readers.Markdown (readMarkdown)
 
 loadTemplatesDynamic ::
   forall m n.
@@ -24,11 +20,11 @@ loadTemplatesDynamic ::
 loadTemplatesDynamic =
   loadTemplatesDynamic' patts ins
   where
-    patts = [(InlineTpl, "**/*.inl.md"), (BlockTpl, "**/*.blk.md")]
-    ins t fp txt =
+    patts = [((), "**/*.md")]
+    ins () fp txt =
       either
         (throw . TemplateLoadingException . toString . renderError)
-        (fromDocument t (FileDefinition fp))
+        (templateData' (FileDefinition fp))
         $ runPure
         $ readMarkdown
           def {readerExtensions = pandocExtensions}
@@ -36,10 +32,3 @@ loadTemplatesDynamic =
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimState n)
 loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
-
--- Template loading helpers
-
-fromDocument :: Monad m => TemplateType -> DefinitionSite -> Pandoc -> SomeExpansion m
-fromDocument BlockTpl site (Pandoc _ b) = templateData' site b
-fromDocument InlineTpl site (Pandoc _ (Para i : _)) = templateData' site i
-fromDocument InlineTpl site _ = someExpansion' @Inline site ignore
