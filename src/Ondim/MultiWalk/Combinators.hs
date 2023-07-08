@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -18,13 +19,13 @@ module Ondim.MultiWalk.Combinators
   )
 where
 
-import Control.MultiWalk.HasSub (SelSpec, SubSpec (..), AllMods)
+import Control.MultiWalk.HasSub (AllMods, SelSpec, SubSpec (..))
 import Control.MultiWalk.HasSub qualified as HS
+import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class (OndimNode (..))
 import Ondim.MultiWalk.Core
 import Ondim.MultiWalk.Substructure
-import qualified Data.Text as T
 
 type family CombinatorCarrier (b :: Type) :: Type where
   CombinatorCarrier (Nesting b) = b
@@ -33,11 +34,27 @@ type family CombinatorCarrier (b :: Type) :: Type where
   CombinatorCarrier (Trav f a) = f (Carrier a)
   CombinatorCarrier (Converting b _) = b
   CombinatorCarrier (Sequence a _) = Carrier a
+  CombinatorCarrier (List a) = [a]
   CombinatorCarrier a = [a]
 
 type instance HS.Carrier OCTag a = CombinatorCarrier a
 
 -- Definitions
+
+data List a
+
+instance (OndimNode a) => CanLift (List a) where
+  liftSub = liftNodes
+
+newtype ListWrapper a = ListWrapper {unListW :: [a]}
+  deriving (Generic)
+
+instance (OndimNode a) => OndimNode (ListWrapper a) where
+  type ExpTypes (ListWrapper a) = '[ToSpec (List a)]
+  castFrom p = ((one . ListWrapper) .) <$> castFrom p
+  castTo p = (. unListW) . foldMap' <$> castTo p
+
+deriving via (ListWrapper a) instance (OndimNode a) => OndimNode [a]
 
 {- | Use this for matching with another type that is coercible to the functor
 you want.
@@ -162,7 +179,7 @@ instance
   where
   getSubs x = getSubs @k @a x <> getSubs @k @b x
 
--- Somewhat lost
+-- Somewhat lost instances
 
 instance OndimNode Attribute where
   type ExpTypes Attribute = '[ToSpec (OneSub Text)]

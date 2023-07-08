@@ -7,7 +7,7 @@
 module Ondim
   ( -- * Classes
     OndimNode (..),
-    OndimCast (..),
+    ondimCast,
 
     -- * Combinators
     module Ondim.MultiWalk.Combinators,
@@ -29,6 +29,9 @@ module Ondim
     runOndimTWith,
     evalOndimTWith,
     evalOndimT,
+
+    -- * Rendering
+    Rendered (..),
 
     -- * Exceptions
     TraceData (..),
@@ -125,6 +128,11 @@ liftChildren ::
   GlobalConstraints m t =>
   Expansion m t
 liftChildren = liftNodes . children
+
+data Rendered
+  = RenderedBS ByteString
+  | RenderedLBS LByteString
+  | RenderedText Text
 
 -- | You can use this as a default instance for the 'children' class method.
 specChildren ::

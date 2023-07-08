@@ -9,13 +9,14 @@ module Ondim.MultiWalk.Core where
 
 import Control.MultiWalk.HasSub (AllMods, GSubTag)
 import Control.MultiWalk.HasSub qualified as HS
+import Data.Bitraversable (bimapM)
 import Data.HashMap.Strict qualified as HMap
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class
+import {-# SOURCE #-} Ondim.MultiWalk.Combinators ()
 import Ondim.MultiWalk.State
 import Type.Reflection (SomeTypeRep (..), eqTypeRep, someTypeRep, typeRep, (:~~:) (..))
 import Prelude hiding (All)
-import Data.Bitraversable (bimapM)
 
 -- * CanLift class
 
@@ -31,32 +32,32 @@ instance {-# OVERLAPPABLE #-} (Carrier a ~ [a], OndimNode a) => CanLift a where
 -- Get stuff from state
 
 fromTemplate ::
-  forall b a.
-  (OndimNode a, OndimCast b) =>
+  forall b a m.
+  (Monad m, OndimNode a, OndimNode b) =>
+  DefinitionSite ->
   b ->
-  Either OndimFailure [a]
-fromTemplate value
-  | Just HRefl <- brep `eqTypeRep` typeRep @a = Right [value]
-  | Just cast <- ondimCast = Right $ cast value
+  Either OndimFailure (Ondim m [a])
+fromTemplate site value
+  | Just HRefl <- brep `eqTypeRep` typeRep @a = Right lifted
+  | Just cast <- ondimCast = Right $ cast <$> lifted
   | otherwise = Left $ TemplateWrongType (SomeTypeRep brep)
   where
+    lifted = withSite site (liftNode value)
     brep = typeRep @b
 
 templateToExpansion ::
   forall m t.
   GlobalConstraints m t =>
-  DefinitionSite ->
-  [t] ->
+  Ondim m [t] ->
   Expansion m t
-templateToExpansion site tpl inner = do
+templateToExpansion tpl inner = do
   callSite <- getCurrentSite
   attrs <- attributes inner
-  withSite site (liftNodes tpl)
-    `binding` do
-      "caller" #. do
-        "children" #: templateData' callSite (children inner)
-        unless (null attrs) $
-          "attrs" #. forM_ attrs (uncurry (#@))
+  tpl `binding` do
+    "caller" #. do
+      "children" #: templateData' callSite (children inner)
+      unless (null attrs) $
+        "attrs" #. forM_ attrs (uncurry (#@))
 
 fromSomeExpansion ::
   forall a m.
@@ -68,8 +69,8 @@ fromSomeExpansion (SomeExpansion t site v)
   | Just HRefl <- t `eqTypeRep` typeRep @a = Right (v, site)
   | otherwise = Left $ ExpansionWrongType (SomeTypeRep t)
 fromSomeExpansion (Template site v) = do
-  thing <- fromTemplate v
-  return (templateToExpansion site thing, site)
+  thing <- fromTemplate site v
+  return (templateToExpansion thing, site)
 fromSomeExpansion (NamespaceData (Namespace n))
   | Just v <- HMap.lookup "" n = fromSomeExpansion v
   | otherwise = Left $ ExpansionWrongType (someTypeRep (Proxy @Namespace))
@@ -78,8 +79,8 @@ getTemplate :: forall m a. GlobalConstraints m a => Text -> Ondim m (Either Ondi
 getTemplate name = do
   mbValue <- Ondim $ gets (lookupExpansion name . expansions)
   case mbValue of
-    Just (Template _ thing) ->
-      bimapM return liftNodes $ fromTemplate thing
+    Just (Template site thing) ->
+      bimapM return id $ fromTemplate site thing
     Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
     Nothing -> return $ Left NotBound
 

@@ -36,4 +36,5 @@ instance OndimNode Node where
     | otherwise = Nothing
   castTo (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . renderWhiskers . one
+    | Just Refl <- eqT @t @Rendered = Just $ one . RenderedText . renderWhiskers . one
     | otherwise = Nothing

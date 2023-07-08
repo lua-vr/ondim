@@ -58,6 +58,7 @@ library
     Ondim.MultiWalk.Class
     Ondim.MultiWalk.Combinators
     Ondim.MultiWalk.Core
+    Ondim.MultiWalk.State
     Ondim.MultiWalk.Substructure
 
   build-depends:
