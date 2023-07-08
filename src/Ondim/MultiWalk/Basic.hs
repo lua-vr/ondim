@@ -44,7 +44,7 @@ instance MonadError e m => MonadError e (Ondim m) where
 
 -- * Filters and Expansions
 
-type GlobalConstraints m t = (OndimNode t, Typeable t, Monad m)
+type GlobalConstraints m t = (OndimNode t, OndimCast t, Typeable t, Monad m)
 
 data DefinitionSite = CodeDefinition SrcLoc | FileDefinition FilePath | NoDefinition
   deriving (Eq, Show)
@@ -73,7 +73,7 @@ type GlobalExpansion m = forall a. GlobalConstraints m a => Expansion m a
 data SomeExpansion m where
   SomeExpansion :: TypeRep a -> DefinitionSite -> Expansion m a -> SomeExpansion m
   GlobalExpansion :: DefinitionSite -> GlobalExpansion m -> SomeExpansion m
-  TextData :: DefinitionSite -> Ondim m Text -> SomeExpansion m
+  Template :: OndimCast a => DefinitionSite -> a -> SomeExpansion m
   NamespaceData :: Namespace m -> SomeExpansion m
 
 instance Semigroup (Namespace m) where
@@ -84,6 +84,10 @@ instance Semigroup (Namespace m) where
 
 instance Monoid (Namespace m) where
   mempty = Namespace mempty
+
+-- Conversions
+
+type Conversions = forall a b. TypeRep a -> TypeRep b -> a -> b
 
 -- * State data
 
@@ -128,27 +132,29 @@ data ExceptionType
       -- ^ Call stack
       Text
       -- ^ Custom error message.
-  | -- | Expansion failures are expected in some sense.
-    ExpansionFailure
+  | -- | Failures are expected in some sense.
+    Failure
       SomeTypeRep
       -- ^ Type representation of the node which triggered the failure.
       Text
       -- ^ Identifier of the node which triggered the failure.
-      ExpansionFailure
+      OndimFailure
   deriving (Show, Exception)
 
 -- | Failures related to the expansions.
-data ExpansionFailure
+data OndimFailure
   = -- | Identifier is not a bound expansion.
-    ExpansionNotBound
+    NotBound
   | -- | Expansion bound under identifier has mismatched type.
     ExpansionWrongType
       SomeTypeRep
       -- ^ Type representation of the expansion that is bound under the identifier.
-  | -- | Identifier is a TextData but node has undefined `fromText`.
-    ExpansionNoFromText
+  | -- | Expansion bound under identifier has mismatched type.
+    TemplateWrongType
+      SomeTypeRep
+      -- ^ Type representation of the expansion that is bound under the identifier.
   | -- | Custom failure.
-    ExpansionFailureOther Text
+    FailureOther Text
   deriving (Show, Exception)
 
 data OndimException = OndimException ExceptionType TraceData
@@ -172,21 +178,21 @@ throwTemplateError t = throwException (TemplateError callStack t)
 catchFailure ::
   Monad m =>
   Ondim m a ->
-  (ExpansionFailure -> Text -> SomeTypeRep -> TraceData -> Ondim m a) ->
+  (OndimFailure -> Text -> SomeTypeRep -> TraceData -> Ondim m a) ->
   Ondim m a
 catchFailure (Ondim m) f = Ondim $ catchError m \(OndimException exc tdata) ->
   case exc of
-    ExpansionFailure trep name e -> unOndimT $ f e name trep tdata
+    Failure trep name e -> unOndimT $ f e name trep tdata
     _other -> m
 
 throwExpFailure ::
   forall t m a.
   (Monad m, Typeable t) =>
   Text ->
-  ExpansionFailure ->
+  OndimFailure ->
   Ondim m a
 throwExpFailure t f =
-  throwException $ ExpansionFailure (someTypeRep (Proxy @t)) t f
+  throwException $ Failure (someTypeRep (Proxy @t)) t f
 
 -- * Combinators
 

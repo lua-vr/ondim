@@ -3,6 +3,7 @@
 module Ondim.Targets.Whiskers.Instances where
 
 import Ondim
+import Data.Typeable ((:~:)(..), eqT)
 
 data Node
   = Section Text [Attribute] [Node]
@@ -30,4 +31,9 @@ instance OndimNode Node where
     Section t _ _ -> Just t
     Single t _ -> Just t
     _ -> Nothing
-  fromText = Just $ one . Textual
+  castFrom (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just $ one . Textual
+    | otherwise = Nothing
+  castTo (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just $ one . renderWhiskers . one
+    | otherwise = Nothing

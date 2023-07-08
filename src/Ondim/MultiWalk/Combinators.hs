@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ondim.MultiWalk.Combinators
   ( -- Spec
@@ -23,6 +24,7 @@ import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class (OndimNode (..))
 import Ondim.MultiWalk.Core
 import Ondim.MultiWalk.Substructure
+import qualified Data.Text as T
 
 type family CombinatorCarrier (b :: Type) :: Type where
   CombinatorCarrier (Nesting b) = b
@@ -159,3 +161,9 @@ instance
   Substructure k (Sequence a b)
   where
   getSubs x = getSubs @k @a x <> getSubs @k @b x
+
+-- Somewhat lost
+
+instance OndimNode Attribute where
+  type ExpTypes Attribute = '[ToSpec (OneSub Text)]
+  identify ~(name, _) = T.stripPrefix "e:" name

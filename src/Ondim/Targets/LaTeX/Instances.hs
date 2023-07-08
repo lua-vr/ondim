@@ -5,6 +5,7 @@ module Ondim.Targets.LaTeX.Instances where
 import Control.Monad (liftM2)
 import Data.Text qualified as T
 import Ondim
+import Data.Typeable ((:~:)(..), eqT)
 
 data Node
   = Command Text [([Node], [Node])] [Node]
@@ -51,4 +52,6 @@ instance OndimNode Node where
   identify = \case
     Command t _ _ -> Just t
     _ -> Nothing
-  fromText = Just $ one . Text
+  castFrom (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just $ one . Text
+    | otherwise = Nothing

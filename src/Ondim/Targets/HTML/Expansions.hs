@@ -4,7 +4,7 @@ import Data.ByteString.Builder (toLazyByteString)
 import Ondim
 import Ondim.Extra.Exceptions (tryAttrFilter)
 import Ondim.Extra.Expansions
-import Ondim.Extra.Standard (attrSub, bindText, standardMap)
+import Ondim.Extra.Standard (attrSub, standardMap)
 import Ondim.Targets.HTML.Instances
 import Text.XmlHtml qualified as X
 
@@ -25,7 +25,6 @@ bindDefaults st =
         fromMaybe (pure []) do
           parsed <- rightToMaybe $ X.parseHTML "" (encodeUtf8 t)
           return $ liftNodes $ fromNodeList $ X.docContent parsed
-      "bind-text" ## bindText nodeText
     `bindingFilters` do
       "attrSub" $* attrSub '$' ('{', '}')
       "tryAttr" $# tryAttrFilter
@@ -38,14 +37,16 @@ expandHtml ::
 expandHtml node = do
   text <- lookupAttr' "text" node
   let parsed = X.parseHTML "expand.html input" $ encodeUtf8 text
-  case parsed of
-    Left e -> throwTemplateError $ toText e
-    Right p
-      | Just fT <- fromText ->
-          liftNodes (fromNodeList $ X.docContent p)
+  either (throwTemplateError . toText) convert parsed
+  where
+    noCast = throwTemplateError "target is missing cast from text!"
+    convert x = do
+      case ondimCast @Text of
+        Just cast ->
+          liftNodes (fromNodeList $ X.docContent x)
             <&> toNodeList
             <&> X.renderHtmlFragment X.UTF8
             <&> toLazyByteString
             <&> decodeUtf8
-            <&> fT
-      | otherwise -> throwTemplateError "expand.html needs a fromText instance!"
+            <&> cast
+        Nothing -> noCast

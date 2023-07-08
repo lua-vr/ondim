@@ -33,8 +33,10 @@ expandLaTeX ::
 expandLaTeX node = do
   text <- lookupAttr' "text" node
   let parsed = parseLaTeX "expand.latex input" text
-  case parsed of
-    Left e -> throwTemplateError $ toText e
-    Right p
-      | Just fT <- fromText -> fT . renderLaTeX <$> liftNodes p
-      | otherwise -> throwTemplateError "expand.latex needs a fromText instance!"
+  either (throwTemplateError . toText) convert parsed
+  where
+    noCast = throwTemplateError "target is missing cast from text!"
+    convert x = do
+      case ondimCast @Text of
+        Just cast -> cast . renderLaTeX <$> liftNodes x
+        Nothing -> noCast

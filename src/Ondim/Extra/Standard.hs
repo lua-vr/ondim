@@ -9,7 +9,6 @@ module Ondim.Extra.Standard
     scope,
     call,
     bind,
-    bindText,
     attrSub,
   ) where
 
@@ -56,7 +55,7 @@ anyBound node = do
 matchBound :: GlobalExpansion m
 matchBound node = do
   tag <- getSingleAttr' "exp" node
-  tagC <- getTextData tag
+  tagC <- getTemplateFold tag
   switchWithDefault (rightToMaybe tagC) node
 
 ignore :: forall t m. Monad m => Expansion m t
@@ -122,47 +121,11 @@ bind node = do
   let strict = any (("strict" ==) . fst) attrs
   thing <-
     if strict
-      then do
-        child <- liftChildren node
-        return $ pure child
-      else return $ liftChildren node
+      then liftChildren node
+      else return $ children node
   case getSingleAttr "name" attrs of
     Just name -> do
-      putSomeExpansion name $ someExpansion' defSite $ \inner -> do
-        callSite <- getCurrentSite
-        attrs' <- attributes inner
-        withSite defSite $
-          thing `binding` do
-            "caller" #. do
-              "children" ## const (withSite callSite $ liftChildren inner)
-              "attrs" #. assocsExp textData attrs'
-      pure []
-    Nothing -> throwTemplateError "No name for expansion"
-
-{- | This expansion works like Heist's `bind` splice, but binds what's inside as
-  text (via the toTxt parameter).
--}
-bindText ::
-  HasCallStack =>
-  GlobalConstraints m t =>
-  (t -> Text) ->
-  Expansion m t
-bindText toTxt self = do
-  attrs <- attributes self
-  defSite <- getCurrentSite
-  let strict = any (("strict" ==) . fst) attrs
-  thing <-
-    if strict
-      then do
-        child <- liftChildren self
-        return $ pure child
-      else return $ liftChildren self
-  case getSingleAttr "name" attrs of
-    Just name -> do
-      putSomeExpansion name $
-        textMData' defSite $
-          withSite defSite $
-            foldMap toTxt <$> thing
+      putSomeExpansion name $ templateData' defSite thing
       pure []
     Nothing -> throwTemplateError "No name for expansion"
 
@@ -180,7 +143,7 @@ attrEdit start delims = go
             c0 == fst delims,
             let (name, rest3) = T.break (== snd delims) rest2,
             Just (_, rest4) <- T.uncons rest3 -> do
-              res <- callTextData name
+              res <- callTemplateFold name
               (res <>) <$> go rest4
           | otherwise -> T.cons start <$> go rest1
         _noStartChar -> return mempty

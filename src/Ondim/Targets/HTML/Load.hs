@@ -29,4 +29,4 @@ loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
 -- * Template loading helpers
 
 fromDocument :: Monad m => DefinitionSite -> X.Document -> SomeExpansion m
-fromDocument site = fromTemplate site . fromNodeList . X.docContent
+fromDocument site = templateData' site . fromNodeList . X.docContent

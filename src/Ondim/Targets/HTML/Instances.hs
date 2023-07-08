@@ -7,6 +7,7 @@ import Data.Char (isSpace)
 import Data.Text qualified as T
 import Ondim
 import Text.XmlHtml qualified as X
+import Data.Typeable ((:~:)(..), eqT)
 
 {- | We use a new XML datatype so that we can group the node with the newline space
   before it. This makes the output formatting much better.
@@ -44,11 +45,6 @@ toNodeList = foldMap go
       | otherwise = [X.Element a b (toNodeList c)]
     go (TextNode t) = [X.TextNode t]
 
--- | Concatenates all text inside the node.
-nodeText :: HtmlNode -> Text
-nodeText (TextNode t) = t
-nodeText el@Element {} = foldMap nodeText (elementChildren el)
-
 deriving instance (Generic X.Document)
 
 instance OndimNode X.Document where
@@ -67,9 +63,14 @@ instance OndimNode HtmlNode where
        ]
   identify (Element _ name _ _) = T.stripPrefix  "e:" name
   identify _ = Nothing
-  fromText = Just (one . TextNode)
   children = specChildren
   attributes = specAttributes
+  castFrom (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just $ one . TextNode
+    | otherwise = Nothing
+  -- castTo (_ :: Proxy t)
+  --   | Just Refl <- eqT @t @Text = Just . one . TextNode
+  --   | otherwise = const Nothing
 
 -- | A hack, unfortunately.
 rawNode :: Text -> HtmlNode

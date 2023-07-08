@@ -32,18 +32,20 @@ exceptionExp exc@(OndimException e t) = do
       "type" #@ "template-error"
       "stacktrace" #@ toText $ prettyCallStack cs
       "message" #@ msg
-    ExpansionFailure trep name f -> do
+    Failure trep name f -> do
       "type" #@ "failure"
       "caller" #. do
         "type" #@ show trep
         "name" #@ name
       "failure" #. case f of
-        ExpansionNotBound -> "type" #@ "not-bound"
+        NotBound -> "type" #@ "not-bound"
         ExpansionWrongType trep2 -> do
-          "type" #@ "wrong-type"
+          "type" #@ "expansion-wrong-type"
           "bound-type" #@ show trep2
-        ExpansionNoFromText -> "type" #@ "missing-fromtext"
-        ExpansionFailureOther msg -> do
+        TemplateWrongType trep2 -> do
+          "type" #@ "template-wrong-type"
+          "bound-type" #@ show trep2
+        FailureOther msg -> do
           "type" #@ "other"
           "message" #@ msg
   where
@@ -76,9 +78,9 @@ prettyException (OndimException e t) =
         "Maximum expansion depth exceeded. Did you write something recursive?\n"
       TemplateError cs msg -> do
         msg <> "\n\n" <> "Template error! " <> toText (prettyCallStack cs)
-      ExpansionFailure trep name f ->
+      Failure trep name f ->
         case f of
-          ExpansionNotBound ->
+          NotBound ->
             "Identifier '" <> name <> "' (of type " <> show trep <> ") is not bound!"
           ExpansionWrongType trep2 ->
             "Identifier '"
@@ -88,13 +90,15 @@ prettyException (OndimException e t) =
               <> " instead of "
               <> show trep
               <> "."
-          ExpansionNoFromText ->
+          TemplateWrongType trep2 ->
             "Identifier '"
               <> name
-              <> "' is bound to text data, but type "
+              <> "' is bound to an expansion of type "
+              <> show trep2
+              <> " instead of "
               <> show trep
-              <> " is missing a 'fromText' instance."
-          ExpansionFailureOther msg ->
+              <> ", and no conversion is declared."
+          FailureOther msg ->
             msg
               <> "\n\n(While calling identifier '"
               <> name

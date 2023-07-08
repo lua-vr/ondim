@@ -40,6 +40,6 @@ loadTemplates dirs = fst <$> runNoLoggingT (loadTemplatesDynamic dirs)
 -- Template loading helpers
 
 fromDocument :: Monad m => TemplateType -> DefinitionSite -> Pandoc -> SomeExpansion m
-fromDocument BlockTpl site (Pandoc _ b) = fromTemplate site b
-fromDocument InlineTpl site (Pandoc _ (Para i : _)) = fromTemplate site i
+fromDocument BlockTpl site (Pandoc _ b) = templateData' site b
+fromDocument InlineTpl site (Pandoc _ (Para i : _)) = templateData' site i
 fromDocument InlineTpl site _ = someExpansion' @Inline site ignore

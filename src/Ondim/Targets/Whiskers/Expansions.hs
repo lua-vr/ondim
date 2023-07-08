@@ -30,8 +30,10 @@ expandWhiskers ::
 expandWhiskers delims node = do
   text <- lookupAttr' "text" node
   let parsed = parseWhiskers delims "expand.whiskers input" text
-  case parsed of
-    Left e -> throwTemplateError $ toText e
-    Right p
-      | Just fT <- fromText -> fT . renderWhiskers <$> liftNodes p
-      | otherwise -> throwTemplateError "expand.whiskers needs a fromText instance!"
+  either (throwTemplateError . toText) convert parsed
+  where
+    noCast = throwTemplateError "target is missing cast from text!"
+    convert x = do
+      case ondimCast @Text of
+        Just cast -> cast . renderWhiskers <$> liftNodes x
+        Nothing -> noCast

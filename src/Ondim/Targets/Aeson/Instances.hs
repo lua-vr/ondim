@@ -7,6 +7,7 @@ import Data.Aeson
 import Data.Aeson.KeyMap qualified as KM
 import Ondim
 import qualified Data.Aeson.Key as K
+import Data.Typeable ((:~:)(..), eqT)
 
 instance Conversible Array [Value] where
   convertTo = toList
@@ -30,4 +31,11 @@ instance OndimNode Value where
       go k (String t) a = (K.toText k, t) : a
       go _ _ a = a
   attributes _ = pure []
-  fromText = Just $ one . String
+  castFrom (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just $ one . String
+    | otherwise = Nothing
+  castTo (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just \case
+        String t -> [t]
+        _notString -> mempty
+    | otherwise = Nothing

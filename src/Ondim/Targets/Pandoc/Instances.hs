@@ -7,6 +7,8 @@ import Data.Text qualified as T
 import Ondim
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Definition
+import Text.Pandoc.Walk
+import Data.Typeable (eqT, type (:~:) (..))
 
 getId :: [Text] -> Maybe Text
 getId = asum . map (T.stripPrefix "e:")
@@ -39,20 +41,9 @@ instance OndimNode Block where
   identify _ = Nothing
   children = specChildren
   attributes = specAttributes
-
-instance OndimNode Inline where
-  type
-    ExpTypes Inline =
-      '[ ToSpec Inline,
-         ToSpec Block,
-         ToSpec (Converting Attr Attribute),
-         ToSpec (OneSub Text)
-       ]
-  identify (Span (_, n, _) _) = getId n
-  identify _ = Nothing
-  fromText = Just (toList . B.text)
-  children = specChildren
-  attributes = specAttributes
+  castTo (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just $ one . stringify @Block
+    | otherwise = Nothing
 
 instance Conversible Attr [Attribute] where
   convertTo (x, y, z) =
@@ -64,3 +55,36 @@ instance Conversible Attr [Attribute] where
       go ("id", a) = (a, [], [])
       go ("class", a) = ("", T.split (' ' ==) a, [])
       go x = ("", [], [x])
+
+instance OndimNode Inline where
+  type
+    ExpTypes Inline =
+      '[ ToSpec Inline,
+         ToSpec Block,
+         ToSpec (Converting Attr Attribute),
+         ToSpec (OneSub Text)
+       ]
+  identify (Span (_, n, _) _) = getId n
+  identify _ = Nothing
+  children = specChildren
+  attributes = specAttributes
+  castTo (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just $ one . stringify @Inline
+    | otherwise = Nothing
+  castFrom (_ :: Proxy t)
+    | Just Refl <- eqT @t @Text = Just $ toList . B.text
+    | otherwise = Nothing
+
+-- Miscellaneous (from Text.Pandoc.Shared)
+
+stringify :: Walkable Inline a => a -> T.Text
+stringify = query go
+  where
+    go :: Inline -> T.Text
+    go Space = " "
+    go SoftBreak = " "
+    go (Str x) = x
+    go (Code _ x) = x
+    go (Math _ x) = x
+    go LineBreak = " "
+    go _ = ""

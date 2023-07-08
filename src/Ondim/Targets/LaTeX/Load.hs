@@ -19,7 +19,7 @@ loadTemplatesDynamic =
     ins () fp text =
       either
         (throw . TemplateLoadingException)
-        (fromTemplate $ FileDefinition fp)
+        (templateData' $ FileDefinition fp)
         (parseLaTeX fp $ decodeUtf8 text)
 
 loadTemplates :: Monad n => [FilePath] -> IO (OndimState n)

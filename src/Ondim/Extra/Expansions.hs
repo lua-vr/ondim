@@ -64,7 +64,7 @@ listList f list node = do
       Nothing -> return liftChildren
   intercalateWith <- lookupAttr "intercalate" node
   let inter txt
-        | Just ft <- fromText @t = intercalate (ft txt)
+        | Just cast <- ondimCast = intercalate (cast txt)
         | otherwise = join
       join' = maybe join inter intercalateWith
   withSomeExpansion alias Nothing $
@@ -103,9 +103,7 @@ mapExp vf obj = assocsExp vf (Map.toList obj)
 
 ifElse ::
   forall t m.
-  ( OndimNode t,
-    Monad m
-  ) =>
+  GlobalConstraints m t =>
   Bool ->
   Expansion m t
 ifElse cond node = do
