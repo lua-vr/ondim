@@ -8,14 +8,13 @@ import Ondim.Targets.HTML.Instances
 import Text.HTML.DOM qualified as X
 import qualified Text.XML as X
 
-bindDefaults ::
-  forall m t.
-  Monad m =>
-  Ondim m t ->
-  Ondim m t
-bindDefaults st =
-  st
-    `binding` do
+defaultState :: Monad m => OndimState m
+defaultState =
+  OndimState { expansions = exps,
+               filters = filts
+             }
+  where
+    exps = mapToNamespace do
       standardMap
       "raw" ## \(node :: HtmlNode) -> do
         t <- lookupAttr' "text" node
@@ -23,6 +22,6 @@ bindDefaults st =
       "expanded" ## \(node :: HtmlNode) -> do
         t <- X.parseLT . toLText <$> lookupAttr' "text" node
         liftNodes $ toHtmlNodes $ X.elementNodes $ X.documentRoot t
-    `bindingFilters` do
+    filts = mapToFilters do
       "attrSub" $* attrSub '$' ('{', '}')
       "tryAttr" $# tryAttrFilter

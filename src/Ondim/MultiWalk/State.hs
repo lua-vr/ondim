@@ -19,6 +19,7 @@ module Ondim.MultiWalk.State
     unbind,
     -- Expansion map
     ExpansionMap,
+    mapToNamespace,
     binding,
     -- Expansion constructors
     (#:),
@@ -39,6 +40,7 @@ module Ondim.MultiWalk.State
     (#.),
     -- Filter map
     FilterMap,
+    mapToFilters,
     bindingFilters,
     -- Filter constructors
     ($:),
@@ -188,11 +190,14 @@ infixr 0 #*
 (#*) :: HasCallStack => Text -> GlobalExpansion m -> ExpansionMap m
 name #* ex = name #: globalExpansion ex
 
-namespace :: ExpansionMap m -> SomeExpansion m
-namespace ex = NamespaceData $ foldl' go mempty exps
+mapToNamespace :: ExpansionMap m -> Namespace m
+mapToNamespace ex = foldl' go mempty exps
   where
     go = flip $ uncurry insertExpansion
     exps = mapMaybe sequence $ execWriter ex
+
+namespace :: ExpansionMap m -> SomeExpansion m
+namespace = NamespaceData . mapToNamespace
 
 namespace' :: Namespace m -> SomeExpansion m
 namespace' = NamespaceData
@@ -226,6 +231,12 @@ infixr 0 $*
 
 ($*) :: Typeable t => Text -> MapFilter m t -> FilterMap m
 name $* ex = name $: mapFilter ex
+
+mapToFilters :: FilterMap m -> Filters m
+mapToFilters ex = foldl' go mempty exps
+  where
+    go = flip $ uncurry Map.insert
+    exps = mapMaybe sequence $ execWriter ex
 
 -- | Infix version of @withExpansions@ to bind using MapSyntax.
 binding ::
