@@ -38,11 +38,11 @@ fromTemplate ::
   b ->
   Either OndimFailure (Ondim m [a])
 fromTemplate site value
-  | Just HRefl <- brep `eqTypeRep` typeRep @a = Right lifted
+  | Just HRefl <- brep `eqTypeRep` typeRep @a = Right (one <$> lifted)
   | Just cast <- ondimCast = Right $ cast <$> lifted
   | otherwise = Left $ TemplateWrongType (SomeTypeRep brep)
   where
-    lifted = withSite site (liftNode value)
+    lifted = withSite site (liftSubstructures value)
     brep = typeRep @b
 
 templateToExpansion ::

@@ -4,8 +4,8 @@ module Ondim.Targets.LaTeX.Instances where
 
 import Control.Monad (liftM2)
 import Data.Text qualified as T
+import Data.Typeable (eqT, (:~:) (..))
 import Ondim
-import Data.Typeable ((:~:)(..), eqT)
 
 data Node
   = Command Text [([Node], [Node])] [Node]
@@ -38,9 +38,10 @@ escapeLaTeX = T.concatMap \case
 instance OndimNode Node where
   type
     ExpTypes Node =
-      '[ ToSpec (Trav [] Node),
-         ToSpec Node
-       ]
+      'SpecList
+        '[ ToSpec (Trav [] Node),
+           ToSpec Node
+         ]
   children = specChildren
   attributes (Command _ pairs _) =
     forM pairs \(k, v) ->

@@ -25,7 +25,7 @@ instance L.ToHtml HtmlDocument where
   toHtmlRaw = mempty
 
 instance OndimNode HtmlDocument where
-  type ExpTypes HtmlDocument = '[ToSpec (Nesting HtmlElement)]
+  type ExpTypes HtmlDocument = 'SpecList '[ToSpec (Nesting HtmlElement)]
   castTo (_ :: Proxy t)
     | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
     | otherwise = Nothing
@@ -66,7 +66,7 @@ instance L.ToHtml HtmlElement where
   toHtmlRaw = mempty
 
 instance OndimNode HtmlElement where
-  type ExpTypes HtmlElement = '[ToSpec Attribute, ToSpec HtmlNode]
+  type ExpTypes HtmlElement = 'SpecList '[ToSpec Attribute, ToSpec HtmlNode]
   castTo (_ :: Proxy t)
     | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
     | otherwise = Nothing
@@ -107,7 +107,7 @@ toHtmlNodes = foldr go [] . filter notEmpty
     go X.NodeInstruction {} xs = xs
 
 instance OndimNode HtmlNode where
-  type ExpTypes HtmlNode = '[ToSpec (Nesting HtmlElement), ToSpec (OneSub Text)]
+  type ExpTypes HtmlNode = 'SpecList '[ToSpec (Nesting HtmlElement), ToSpec (OneSub Text)]
   identify (Element (HtmlElement _ name _ _)) = T.stripPrefix "e:" name
   identify _ = Nothing
   children = specChildren

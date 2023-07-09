@@ -2,8 +2,8 @@
 
 module Ondim.Targets.Whiskers.Instances where
 
+import Data.Typeable (eqT, (:~:) (..))
 import Ondim
-import Data.Typeable ((:~:)(..), eqT)
 
 data Node
   = Section Text [Attribute] [Node]
@@ -22,9 +22,10 @@ renderWhiskers = foldMap go
 instance OndimNode Node where
   type
     ExpTypes Node =
-      '[ ToSpec Attribute,
-         ToSpec Node
-       ]
+      'SpecList
+        '[ ToSpec Attribute,
+           ToSpec Node
+         ]
   children = specChildren
   attributes = specAttributes
   identify = \case

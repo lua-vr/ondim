@@ -16,23 +16,24 @@ getId :: [Text] -> Maybe Text
 getId = asum . map (T.stripPrefix "e:")
 
 instance OndimNode Pandoc where
-  type ExpTypes Pandoc = '[ToSpec Block, ToSpec (Nesting Meta)]
+  type ExpTypes Pandoc = 'SpecList '[ToSpec Block, ToSpec (Nesting Meta)]
   castTo (_ :: Proxy t)
     | Just Refl <- eqT @t @Rendered = Just $ one . encode
     | otherwise = Nothing
 
 instance OndimNode Meta where
-  type ExpTypes Meta = '[ToSpec (Trav (Map Text) (Nesting MetaValue))]
+  type ExpTypes Meta = 'SpecList '[ToSpec (Trav (Map Text) (Nesting MetaValue))]
 
 instance OndimNode MetaValue where
   type
     ExpTypes MetaValue =
-      '[ ToSpecSel ('ConsSel "MetaMap") (Trav (Map Text) (Nesting MetaValue)),
-         ToSpecSel ('ConsSel "MetaList") MetaValue,
-         ToSpecSel ('ConsSel "MetaString") (OneSub Text),
-         ToSpecSel ('ConsSel "MetaInlines") Inline,
-         ToSpecSel ('ConsSel "MetaBlocks") Block
-       ]
+      'SpecList
+        '[ ToSpecSel ('ConsSel "MetaMap") (Trav (Map Text) (Nesting MetaValue)),
+           ToSpecSel ('ConsSel "MetaList") MetaValue,
+           ToSpecSel ('ConsSel "MetaString") (OneSub Text),
+           ToSpecSel ('ConsSel "MetaInlines") Inline,
+           ToSpecSel ('ConsSel "MetaBlocks") Block
+         ]
   identify (MetaMap o)
     | Just (MetaString name) <- Map.lookup "$" o = Just name
   identify _ = Nothing
@@ -51,68 +52,76 @@ instance OndimNode MetaValue where
 instance OndimNode ([Inline], [[Block]]) where
   type
     ExpTypes ([Inline], [[Block]]) =
-      '[ ToSpec Inline,
-         ToSpec (Trav [] Block)
-       ]
+      'SpecList
+        '[ ToSpec Inline,
+           ToSpec (Trav [] Block)
+         ]
 
 instance OndimNode Caption where
   type
     ExpTypes Caption =
-      '[ ToSpec (Trav Maybe Inline),
-         ToSpec Block
-       ]
+      'SpecList
+        '[ ToSpec (Trav Maybe Inline),
+           ToSpec Block
+         ]
 
 instance OndimNode TableHead where
   type
     ExpTypes TableHead =
-      '[ ToSpec (Converting Attr Attribute),
-         ToSpec Row
-       ]
+      'SpecList
+        '[ ToSpec (Converting Attr Attribute),
+           ToSpec Row
+         ]
 
 instance OndimNode TableFoot where
   type
     ExpTypes TableFoot =
-      '[ ToSpec (Converting Attr Attribute),
-         ToSpec Row
-       ]
+      'SpecList
+        '[ ToSpec (Converting Attr Attribute),
+           ToSpec Row
+         ]
 
 instance OndimNode TableBody where
   type
     ExpTypes TableBody =
-      '[ ToSpec (Converting Attr Attribute),
-         ToSpec Row
-       ]
+      'SpecList
+        '[ ToSpec (Converting Attr Attribute),
+           ToSpec Row
+         ]
 
 instance OndimNode Row where
   type
     ExpTypes Row =
-      '[ ToSpec (Converting Attr Attribute),
-         ToSpec Cell
-       ]
+      'SpecList
+        '[ ToSpec (Converting Attr Attribute),
+           ToSpec Cell
+         ]
 
 instance OndimNode Cell where
   type
     ExpTypes Cell =
-      '[ ToSpec (Converting Attr Attribute),
-         ToSpec Block
-       ]
+      'SpecList
+        '[ ToSpec (Converting Attr Attribute),
+           ToSpec Block
+         ]
 
 instance OndimNode Block where
   type
     ExpTypes Block =
-      '[ ToSpec Inline,
-         ToSpec (Trav [] Inline),
-         ToSpec Block,
-         ToSpec (Trav [] Block),
-         ToSpec (Trav [] (Nesting ([Inline], [[Block]]))),
-         ToSpec (Nesting Caption),
-         ToSpec (Nesting TableHead),
-         ToSpec TableBody,
-         ToSpec (Nesting TableFoot),
-         ToSpec (Converting Attr Attribute),
-         ToSpec (MatchWith Format (OneSub Text)),
-         ToSpec (OneSub Text)
-       ]
+      'SpecList
+        '[ ToSpec Inline,
+           ToSpec (Trav [] Inline),
+           ToSpec Block,
+           ToSpec (Trav [] Block),
+           ToSpec (Trav [] (Nesting ([Inline], [[Block]]))),
+           ToSpec (Nesting Caption),
+           ToSpec (Nesting TableHead),
+           ToSpec TableBody,
+           ToSpec (Nesting TableFoot),
+           ToSpec (Converting Attr Attribute),
+           ToSpec (MatchWith Format (OneSub Text)),
+           ToSpec (OneSub Text)
+         ]
   identify (Div (_, n, _) _) = getId n
   identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
@@ -140,21 +149,23 @@ instance Conversible Attr [Attribute] where
 instance OndimNode Citation where
   type
     ExpTypes Citation =
-      '[ ToSpec (OneSub Text),
-         ToSpec Inline
-       ]
+      'SpecList
+        '[ ToSpec (OneSub Text),
+           ToSpec Inline
+         ]
 
 instance OndimNode Inline where
   type
     ExpTypes Inline =
-      '[ ToSpec Inline,
-         ToSpec Block,
-         ToSpec (Converting Attr Attribute),
-         ToSpec (OneSub Text),
-         ToSpec Citation,
-         ToSpec (MatchWith Format (OneSub Text)),
-         ToSpec (Nesting Target)
-       ]
+      'SpecList
+        '[ ToSpec Inline,
+           ToSpec Block,
+           ToSpec (Converting Attr Attribute),
+           ToSpec (OneSub Text),
+           ToSpec Citation,
+           ToSpec (MatchWith Format (OneSub Text)),
+           ToSpec (Nesting Target)
+         ]
   identify (Span (_, n, _) _) = getId n
   identify _ = Nothing
   children = specChildren

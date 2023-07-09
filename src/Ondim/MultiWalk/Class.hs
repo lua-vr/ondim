@@ -4,7 +4,7 @@
 
 module Ondim.MultiWalk.Class (OndimNode (..), ondimCast) where
 
-import Control.MultiWalk.HasSub (AllMods, GSubTag, SubSpec)
+import Control.MultiWalk.HasSub (AllMods, GSubTag, Spec (..))
 import Ondim.MultiWalk.Basic
 import {-# SOURCE #-} Ondim.MultiWalk.Core
 
@@ -17,7 +17,7 @@ class
   ) =>
   OndimNode t
   where
-  type ExpTypes t :: [SubSpec]
+  type ExpTypes t :: Spec
   identify :: t -> Maybe Text
   identify _ = Nothing
   attributes :: Monad m => t -> Ondim m [Attribute]
@@ -30,7 +30,10 @@ class
   castTo _ = Nothing
 
 instance OndimNode Text where
-  type ExpTypes Text = '[]
+  type ExpTypes Text = 'SpecLeaf
+
+instance OndimNode LByteString where
+  type ExpTypes LByteString = 'SpecLeaf
 
 ondimCast :: forall a b. (OndimNode a, OndimNode b) => Maybe (a -> [b])
 ondimCast = castFrom (Proxy @a) <|> castTo (Proxy @b)

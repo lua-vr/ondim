@@ -4,10 +4,10 @@
 module Ondim.Targets.Aeson.Instances where
 
 import Data.Aeson
+import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
+import Data.Typeable (eqT, (:~:) (..))
 import Ondim
-import qualified Data.Aeson.Key as K
-import Data.Typeable ((:~:)(..), eqT)
 
 instance Conversible Array [Value] where
   convertTo = toList
@@ -16,10 +16,11 @@ instance Conversible Array [Value] where
 instance OndimNode Value where
   type
     ExpTypes Value =
-      '[ ToSpecSel ('ConsSel "Object") (Trav KM.KeyMap (Nesting Value)),
-         ToSpecSel ('ConsSel "String") Text,
-         ToSpecSel ('ConsSel "Array") (Converting Array Value)
-       ]
+      'SpecList
+        '[ ToSpecSel ('ConsSel "Object") (Trav KM.KeyMap (Nesting Value)),
+           ToSpecSel ('ConsSel "String") Text,
+           ToSpecSel ('ConsSel "Array") (Converting Array Value)
+         ]
   identify (Object o)
     | Just (String name) <- KM.lookup "$" o = Just name
   identify _ = Nothing

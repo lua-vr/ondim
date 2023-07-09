@@ -1,4 +1,3 @@
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -6,6 +5,7 @@ module Ondim.MultiWalk.Combinators
   ( -- Spec
     ToSpec,
     ToSpecSel,
+    Spec (..),
     SubSpec (..),
     SelSpec (..),
     -- Combinators
@@ -19,9 +19,10 @@ module Ondim.MultiWalk.Combinators
   )
 where
 
-import Control.MultiWalk.HasSub (AllMods, SelSpec, SubSpec (..))
+import Control.MultiWalk.HasSub (AllMods, SelSpec, Spec (..), SubSpec (..))
 import Control.MultiWalk.HasSub qualified as HS
 import Data.Text qualified as T
+import Data.Typeable (eqT, (:~:) (..))
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class (OndimNode (..))
 import Ondim.MultiWalk.Core
@@ -46,15 +47,12 @@ data List a
 instance (OndimNode a) => CanLift (List a) where
   liftSub = liftNodes
 
-newtype ListWrapper a = ListWrapper {unListW :: [a]}
-  deriving (Generic)
-
-instance (OndimNode a) => OndimNode (ListWrapper a) where
-  type ExpTypes (ListWrapper a) = '[ToSpec (List a)]
-  castFrom p = ((one . ListWrapper) .) <$> castFrom p
-  castTo p = (. unListW) . foldMap' <$> castTo p
-
-deriving via (ListWrapper a) instance (OndimNode a) => OndimNode [a]
+instance (OndimNode a) => OndimNode [a] where
+  type ExpTypes [a] = 'SpecSelf (List a)
+  castFrom p = (one .) <$> castFrom p
+  castTo (p :: Proxy t)
+    | Just Refl <- eqT @t @a = Just id
+    | otherwise = foldMap' <$> castTo p
 
 {- | Use this for matching with another type that is coercible to the functor
 you want.
@@ -182,5 +180,5 @@ instance
 -- Somewhat lost instances
 
 instance OndimNode Attribute where
-  type ExpTypes Attribute = '[ToSpec (OneSub Text)]
+  type ExpTypes Attribute = 'SpecList '[ToSpec (OneSub Text)]
   identify ~(name, _) = T.stripPrefix "e:" name
