@@ -51,7 +51,7 @@ exceptionExp exc@(OndimException e t) = do
   where
     locExp = \case
       NoDefinition -> "type" #@ "none"
-      FileDefinition f -> do
+      FileDefinition f _ -> do
         "type" #@ "file"
         "filepath" #@ toText f
       CodeDefinition c -> do
@@ -69,7 +69,7 @@ prettyException (OndimException e t) =
     loc = loc' (currentSite t)
     loc' = \case
       NoDefinition -> "undefined location"
-      FileDefinition fp -> "file " <> show fp
+      FileDefinition fp _ -> "file " <> show fp
       CodeDefinition c -> "code location " <> toText (prettySrcLoc c)
     eStack = T.unlines $ expansionTrace t <&> \(name, l) ->
       "'" <> name <> "' from " <> loc' l

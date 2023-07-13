@@ -46,6 +46,7 @@ module Ondim
     catchFailure,
     DefinitionSite (..),
     getCurrentSite,
+    fileSite,
     callStackSite,
     withSite,
 

@@ -62,18 +62,26 @@ templateToExpansion tpl inner = do
 fromSomeExpansion ::
   forall a m.
   GlobalConstraints m a =>
+  DefinitionSite ->
   SomeExpansion m ->
   Either OndimFailure (Expansion m a, DefinitionSite)
-fromSomeExpansion (GlobalExpansion site e) = Right (e, site)
-fromSomeExpansion (SomeExpansion t site v)
-  | Just HRefl <- t `eqTypeRep` typeRep @a = Right (v, site)
-  | otherwise = Left $ ExpansionWrongType (SomeTypeRep t)
-fromSomeExpansion (Template site v) = do
-  thing <- fromTemplate site v
-  return (templateToExpansion thing, site)
-fromSomeExpansion (NamespaceData (Namespace n))
-  | Just v <- HMap.lookup "" n = fromSomeExpansion v
-  | otherwise = Left $ ExpansionWrongType (someTypeRep (Proxy @Namespace))
+fromSomeExpansion callSite someExp =
+  case someExp' of
+    (GlobalExpansion site e) -> Right (e, site)
+    (SomeExpansion t site v)
+      | Just HRefl <- t `eqTypeRep` typeRep @a -> Right (v, site)
+      | otherwise -> Left $ ExpansionWrongType (SomeTypeRep t)
+    (Template site v) -> do
+      thing <- fromTemplate site v
+      return (templateToExpansion thing, site)
+    NamespaceData {} -> Left $ ExpansionWrongType (someTypeRep (Proxy @Namespace))
+  where
+    someExp' = case someExp of
+      (NamespaceData ns@(Namespace n))
+        | Just v <- HMap.lookup "" n -> v
+        | FileDefinition _ ext <- callSite,
+          Just v <- lookupExpansion ext ns -> v
+      _nonNamespace -> someExp
 
 getTemplate :: forall m a. GlobalConstraints m a => Text -> Ondim m (Either OndimFailure [a])
 getTemplate name = do
@@ -105,10 +113,11 @@ getExpansion ::
   Ondim m (Either OndimFailure (Expansion m t))
 getExpansion name = do
   mbValue <- Ondim $ gets $ lookupExpansion name . expansions
+  site <- getCurrentSite
   return do
     value <- maybeToRight NotBound mbValue
-    (expansion, site) <- fromSomeExpansion value
-    return $ expCtx name site . expansion
+    (expansion, expSite) <- fromSomeExpansion site value
+    return $ expCtx name expSite . expansion
 {-# INLINEABLE getExpansion #-}
 
 expCtx :: forall m a. Monad m => Text -> DefinitionSite -> Ondim m a -> Ondim m a

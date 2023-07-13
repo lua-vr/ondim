@@ -1,27 +1,11 @@
+{-# LANGUAGE RecordWildCards #-}
 module Ondim.Targets.Whiskers.Load where
 
-import Control.Exception (throw)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger, runNoLoggingT)
-import Ondim
-import Ondim.Extra.Loading
+import Ondim.Extra.Loading (LoadConfig (..), LoadFn (..))
 import Ondim.Targets.Whiskers.Parser (parseWhiskers)
 
-loadTemplatesDynamic ::
-  forall m n.
-  (Monad n, MonadLogger m, MonadIO m, MonadUnliftIO m) =>
-  (Text, Text) ->
-  [FilePath] ->
-  m (OndimState n, (OndimState n -> m ()) -> m ())
-loadTemplatesDynamic d =
-  loadTemplatesDynamic' patts ins
+loadWhiskers :: (Text, Text) -> LoadConfig
+loadWhiskers d = LoadConfig {..}
   where
-    patts = [((), "**/*.w.*")]
-    ins () fp text =
-      either
-        (throw . TemplateLoadingException)
-        (templateData' $ FileDefinition fp)
-        (parseWhiskers d fp $ decodeUtf8 text)
-
-loadTemplates :: Monad n => (Text, Text) -> [FilePath] -> IO (OndimState n)
-loadTemplates d dirs = fst <$> runNoLoggingT (loadTemplatesDynamic d dirs)
+    patterns = ["**/*.w.*"]
+    loadFn = LoadFn \fp bs -> parseWhiskers d fp $ decodeUtf8 bs

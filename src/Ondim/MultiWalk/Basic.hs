@@ -14,6 +14,8 @@ import GHC.Exception (SrcLoc)
 import GHC.Exts qualified as GHC
 import {-# SOURCE #-} Ondim.MultiWalk.Class
 import Type.Reflection (SomeTypeRep, TypeRep, someTypeRep)
+import System.FilePath (takeExtensions)
+import qualified Data.Text as T
 
 -- * Monad
 
@@ -46,8 +48,16 @@ instance MonadError e m => MonadError e (Ondim m) where
 
 type GlobalConstraints m t = (OndimNode t, Typeable t, Monad m)
 
-data DefinitionSite = CodeDefinition SrcLoc | FileDefinition FilePath | NoDefinition
+data DefinitionSite
+  = CodeDefinition SrcLoc
+  | FileDefinition {definitionPath :: FilePath, definitionExt :: Text}
+  | NoDefinition
   deriving (Eq, Show)
+
+fileSite :: FilePath -> DefinitionSite
+fileSite fp = FileDefinition fp exts
+  where
+    exts = T.drop 1 $ toText $ takeExtensions fp
 
 callStackSite :: DefinitionSite
 callStackSite = case GHC.toList callStack of
