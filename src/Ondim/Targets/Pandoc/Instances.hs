@@ -18,6 +18,11 @@ getId = asum . map (T.stripPrefix "e:")
 instance OndimNode Pandoc where
   type ExpTypes Pandoc = 'SpecList '[ToSpec Block, ToSpec (Nesting Meta)]
   castTo (_ :: Proxy t)
+    | Just Refl <- eqT @t @Block = Just $ \case
+        (Pandoc _ b) -> b
+    | Just Refl <- eqT @t @Inline = Just $ \case
+        (Pandoc _ (Para i : _)) -> i
+        _ -> []
     | Just Refl <- eqT @t @Rendered = Just $ one . encode
     | otherwise = Nothing
 
@@ -129,11 +134,14 @@ instance OndimNode Block where
   attributes = specAttributes
   castTo (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . stringify @Block
+    | Just Refl <- eqT @t @Inline = Just $ \case
+        (Para i) -> i
+        _ -> []
     | otherwise = Nothing
   castFrom (_ :: Proxy t)
-    | Just Refl <- eqT @t @Pandoc = Just $ \case
-        (Pandoc _ b) -> b
+    | Just Refl <- eqT @t @[Inline] = Just $ one . Plain
     | otherwise = Nothing
+
 
 instance Conversible Attr [Attribute] where
   convertTo (x, y, z) =
@@ -175,9 +183,6 @@ instance OndimNode Inline where
     | otherwise = Nothing
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ toList . B.text
-    | Just Refl <- eqT @t @Pandoc = Just $ \case
-        (Pandoc _ (Para i : _)) -> i
-        _ -> []
     | otherwise = Nothing
 
 -- Miscellaneous (from Text.Pandoc.Shared)

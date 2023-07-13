@@ -36,4 +36,4 @@ instance OndimNode LByteString where
   type ExpTypes LByteString = 'SpecLeaf
 
 ondimCast :: forall a b. (OndimNode a, OndimNode b) => Maybe (a -> [b])
-ondimCast = castFrom (Proxy @a) <|> castTo (Proxy @b)
+ondimCast = castTo (Proxy @b) <|> castFrom (Proxy @a)

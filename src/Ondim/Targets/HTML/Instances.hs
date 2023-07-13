@@ -27,6 +27,7 @@ instance L.ToHtml HtmlDocument where
 instance OndimNode HtmlDocument where
   type ExpTypes HtmlDocument = 'SpecList '[ToSpec (Nesting HtmlElement)]
   castTo (_ :: Proxy t)
+    | Just Refl <- eqT @t @HtmlNode = Just $ elementChildren . documentRoot
     | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
     | otherwise = Nothing
 
@@ -114,7 +115,6 @@ instance OndimNode HtmlNode where
   attributes = specAttributes
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . TextNode
-    | Just Refl <- eqT @t @HtmlDocument = Just $ elementChildren . documentRoot
     | otherwise = Nothing
   castTo (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . toStrict . L.renderText . L.toHtml
