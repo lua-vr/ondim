@@ -129,7 +129,7 @@ switchWithDefault tag node = do
   match <- (`findM` els) \x -> do
     if identifiesAs ["case"] x
       then do
-        caseTag <- getSingleAttr' "tag" x
+        caseTag <- getSingleAttr' "id" x
         return $ Just caseTag == tag
       else return False
   fromMaybe (pure []) do

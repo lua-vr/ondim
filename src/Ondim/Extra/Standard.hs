@@ -38,7 +38,7 @@ standardMap = do
 
 ifBound :: forall t m. GlobalConstraints m t => Expansion m t
 ifBound node = do
-  attrs <- fst <<$>> attributes node
+  attrs <- T.split (== ',') <$> getSingleAttr' "id" node
   bound <- allM exists attrs
   ifElse bound node
   where
@@ -54,7 +54,7 @@ anyBound node = do
 
 matchBound :: GlobalExpansion m
 matchBound node = do
-  tag <- getSingleAttr' "exp" node
+  tag <- getSingleAttr' "id" node
   tagC <- getTemplateFold tag
   switchWithDefault (rightToMaybe tagC) node
 
@@ -65,8 +65,7 @@ ignore = const $ pure []
 
 open :: GlobalExpansion m
 open node = do
-  name' <- viaNonEmpty (fst . head) <$> attributes node
-  name <- maybe (throwTemplateError "Namespace not provided.") pure name'
+  name <- getSingleAttr' "id" node
   exps <- getNamespace name
   withoutExpansions [name] $
     case exps of
@@ -104,11 +103,7 @@ scope node = do
 
 call :: GlobalExpansion m
 call node = do
-  attrs <- attributes node
-  (name, _rest) <-
-    case nonEmpty attrs of
-      Just (name :| rest) -> return (fst name, rest)
-      Nothing -> throwTemplateError "Expansion name not provided."
+  name <- getSingleAttr' "id" node
   callExpansion name node
 
 -- * Binding
@@ -123,7 +118,7 @@ bind node = do
     if strict
       then liftChildren node
       else return $ children node
-  case getSingleAttr "name" attrs of
+  case getSingleAttr "id" attrs of
     Just name -> do
       putSomeExpansion name $ templateData' defSite thing
       pure []
