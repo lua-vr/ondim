@@ -38,7 +38,7 @@ jobs:
 
       - name: Configure the build
         run: |
-          cabal configure --enable-tests --enable-benchmarks --enable-documentation
+          cabal configure --enable-tests --enable-benchmarks
           cabal build all --dry-run
 
       - name: Restore cached dependencies
@@ -67,15 +67,12 @@ jobs:
       - name: Run tests
         run: cabal test all
 
-      - name: Build documentation
-        run: cabal haddock all
-
       - name: Configure the build (oldest)
         run: |
           cabal configure --prefer-oldest --enable-tests --enable-benchmarks
           cabal build all --dry-run
 
-      - name: Restore cached dependencies
+      - name: Restore cached dependencies (oldest)
         uses: actions/cache/restore@v3
         id: cache2
         with:
