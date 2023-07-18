@@ -100,9 +100,11 @@ library
 
   if flag(with-html)
     build-depends:
+      , conduit
       , html-conduit
       , lucid
       , xml-conduit
+      , xml-types
 
     exposed-modules:
       Ondim.Targets.HTML
