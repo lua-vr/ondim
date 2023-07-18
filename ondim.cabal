@@ -19,7 +19,9 @@ maintainer:         lvr@s-viva.xyz
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files: CHANGELOG.md
+extra-source-files:
+  CHANGELOG.md
+  README.md
 
 flag with-json
   description: Include JSON definitions and dependencies.
