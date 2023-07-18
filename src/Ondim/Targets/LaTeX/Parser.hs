@@ -1,7 +1,7 @@
 -- | This is a fake LaTeX parser.
 module Ondim.Targets.LaTeX.Parser where
 
-import Data.Char (isAsciiLower, isAsciiUpper, isSpace, isUpper, toLower, isSymbol, isNumber)
+import Data.Char (isAsciiLower, isAsciiUpper, isSpace, isUpper, toLower, isNumber)
 import Data.Sequence (Seq (..), (|>))
 import Data.Text qualified as T
 import Ondim.Targets.LaTeX.Instances (Node (..))
@@ -111,8 +111,8 @@ lineEnd = do
 escape :: Parser Nodes
 escape = try do
   _ <- char '\\'
-  s <- satisfy isSymbol
-  return $ one $ Text $ T.pack ['\\', s]
+  s <- satisfy \c -> not $ isAsciiLower c || isAsciiUpper c
+  return $ one $ Text $ T.pack [s]
 
 prose :: Parser Nodes
 prose = do
