@@ -103,7 +103,7 @@ library
   if flag(with-html)
     build-depends:
       , conduit
-      , html-conduit
+      , html-conduit  >=1.3.1
       , lucid
       , xml-conduit
       , xml-types
