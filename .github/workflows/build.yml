@@ -73,18 +73,8 @@ jobs:
 
       - name: Configure the build (oldest)
         run: |
-          cabal clean
           cabal configure --prefer-oldest --enable-tests --enable-benchmarks
           cabal build all --dry-run
-
-      - name: Restore cached dependencies (oldest)
-        uses: actions/cache/restore@v3
-        id: cache
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ runner.os }}-ghc-${{ env.GHC_VERSION }}-cabal-${{ env.CABAL_VERSION }}-plan-${{ hashFiles('**/plan.json') }}
-          restore-keys: |
-            ${{ runner.os }}-ghc-${{ env.GHC_VERSION }}-cabal-${{ env.CABAL_VERSION }}-
 
       - name: Install dependencies (oldest)
         run: cabal build all --only-dependencies
