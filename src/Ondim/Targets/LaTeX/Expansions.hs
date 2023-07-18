@@ -17,6 +17,7 @@ defaultState =
         return [Text $ escapeLaTeX t]
       standardMap
       "" ## liftChildren @Node
+      "sep" #* pure . one
     filts = mapToFilters do
       "sep" $* fmap (foldr go [])
     go (Command "sep" _ _) (Command "sep" _ _ : xs) = Text "\n\n" : xs
