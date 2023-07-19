@@ -15,6 +15,20 @@ import Text.Pandoc.Walk
 getId :: [Text] -> Maybe Text
 getId = asum . map (T.stripPrefix "e:")
 
+data MetaMapLift
+
+type MetaMapSub = Custom (Map Text MetaValue) MetaMapLift
+
+instance CanLift MetaMapSub where
+  liftSub (o :: Map Text MetaValue) =
+    Map.fromList <$> mapMaybeM go (Map.toList o)
+    where
+      go (k, v)
+        | Just (k', '?') <- T.unsnoc k =
+            (Just . (k',) <$> liftSubstructures v)
+              `catchFailure` \_ _ _ _ -> return Nothing
+        | otherwise = Just . (k,) <$> liftSubstructures v
+
 instance OndimNode Pandoc where
   type ExpTypes Pandoc = 'SpecList '[ToSpec Block, ToSpec (Nesting Meta)]
   castTo (_ :: Proxy t)
@@ -27,13 +41,13 @@ instance OndimNode Pandoc where
     | otherwise = Nothing
 
 instance OndimNode Meta where
-  type ExpTypes Meta = 'SpecList '[ToSpec (Trav (Map Text) (Nesting MetaValue))]
+  type ExpTypes Meta = 'SpecList '[ToSpec MetaMapSub]
 
 instance OndimNode MetaValue where
   type
     ExpTypes MetaValue =
       'SpecList
-        '[ ToSpecSel ('ConsSel "MetaMap") (Trav (Map Text) (Nesting MetaValue)),
+        '[ ToSpecSel ('ConsSel "MetaMap") MetaMapSub,
            ToSpecSel ('ConsSel "MetaList") MetaValue,
            ToSpecSel ('ConsSel "MetaString") (OneSub Text),
            ToSpecSel ('ConsSel "MetaInlines") Inline,
@@ -141,7 +155,6 @@ instance OndimNode Block where
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @[Inline] = Just $ one . Plain
     | otherwise = Nothing
-
 
 instance Conversible Attr [Attribute] where
   convertTo (x, y, z) =
