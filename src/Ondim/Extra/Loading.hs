@@ -45,16 +45,18 @@ the state when templates get updated on disk.
 loadTemplatesDynamic ::
   forall m n.
   (MonadLogger m, MonadIO m, MonadUnliftIO m) =>
+  -- | Loading configurations
   [LoadConfig] ->
   -- | Places to look for templates, in descending order of priority.
   [FilePath] ->
+  -- | Initial state
+  OndimState n ->
   m (OndimState n, (OndimState n -> m ()) -> m ())
-loadTemplatesDynamic cfgs places =
+loadTemplatesDynamic cfgs places initial =
   let sources = fromList (zip (zip [1 ..] places) places)
       cfgMap = fromList $ [(i, f) | (i, loadFn -> f) <- zip [1 ..] cfgs]
       patts = [(i, p) | (i, patterns -> ps) <- zip [1 ..] cfgs, p <- ps]
       exclude = []
-      initial = mempty
       handler :: Change (Int, FilePath) Int -> m (OndimState n -> OndimState n)
       handler chg =
         appEndo . mconcat . coerce . join
@@ -69,10 +71,9 @@ loadTemplatesDynamic cfgs places =
                     Delete -> pure \s -> s {expansions = deleteExpansion name (expansions s)}
    in unionMount sources patts exclude initial handler
 
-{- | Load templates from a list of directories in descending order of priority.
--}
+-- | Load templates from a list of directories in descending order of priority.
 loadTemplates :: [LoadConfig] -> [FilePath] -> IO (OndimState n)
-loadTemplates cfgs dirs = fst <$> runNoLoggingT (loadTemplatesDynamic cfgs dirs)
+loadTemplates cfgs dirs = fst <$> runNoLoggingT (loadTemplatesDynamic cfgs dirs mempty)
 
 {- | Load templates in pure code from a list of filepaths and bytestrings. Meant
 to be used with the @file-embed@ package.
