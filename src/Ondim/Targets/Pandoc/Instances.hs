@@ -37,6 +37,9 @@ instance OndimNode Pandoc where
     | Just Refl <- eqT @t @Inline = Just $ \case
         (Pandoc _ (Para i : _)) -> i
         _ -> []
+    | Just Refl <- eqT @t @MetaValue = Just $ \case
+        (Pandoc _ (Para i : _)) -> [MetaInlines i]
+        _ -> []
     | Just Refl <- eqT @t @Rendered = Just $ one . encode
     | otherwise = Nothing
 
@@ -54,6 +57,7 @@ instance OndimNode MetaValue where
            ToSpecSel ('ConsSel "MetaBlocks") Block
          ]
   identify (MetaMap o)
+    | Just (MetaInlines [Str name]) <- Map.lookup "$" o = Just name
     | Just (MetaString name) <- Map.lookup "$" o = Just name
   identify _ = Nothing
   children (MetaMap o)
@@ -66,6 +70,7 @@ instance OndimNode MetaValue where
   attributes _ = pure []
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . MetaString
+    | Just Refl <- eqT @t @[Inline] = Just $ one . MetaInlines
     | otherwise = Nothing
 
 instance OndimNode ([Inline], [[Block]]) where
