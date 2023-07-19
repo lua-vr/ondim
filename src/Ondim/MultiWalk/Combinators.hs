@@ -2,13 +2,13 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ondim.MultiWalk.Combinators
-  ( -- Spec
+  ( -- ** Spec
     ToSpec,
     ToSpecSel,
     Spec (..),
     SubSpec (..),
     SelSpec (..),
-    -- Combinators
+    -- ** Combinators
     Nesting,
     MatchWith,
     Conversible (..),
@@ -16,6 +16,11 @@ module Ondim.MultiWalk.Combinators
     Trav,
     OneSub,
     Sequence,
+    Custom,
+    -- ** Internal
+    CanLift (..),
+    Substructure (..),
+    AllMods
   )
 where
 
@@ -36,11 +41,14 @@ type family CombinatorCarrier (b :: Type) :: Type where
   CombinatorCarrier (Converting b _) = b
   CombinatorCarrier (Sequence a _) = Carrier a
   CombinatorCarrier (List a) = [a]
+  CombinatorCarrier (Custom b tag) = b
   CombinatorCarrier a = [a]
 
 type instance HS.Carrier OCTag a = CombinatorCarrier a
 
 -- Definitions
+
+data Custom b tag
 
 data List a
 

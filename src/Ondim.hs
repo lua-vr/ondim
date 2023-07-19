@@ -80,13 +80,10 @@ module Ondim
     lookupAttr,
 
     -- * Auxiliary
-    AllMods,
-    Substructure,
     Attribute,
   )
 where
 
-import Control.MultiWalk.HasSub (AllMods)
 import Data.List qualified as L
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class
