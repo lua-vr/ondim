@@ -111,6 +111,7 @@ library
       Ondim.Targets.HTML.Expansions
       Ondim.Targets.HTML.Instances
       Ondim.Targets.HTML.Load
+      Ondim.Targets.HTML.Parser
 
   if flag(with-whiskers)
     build-depends:   megaparsec

@@ -1,7 +1,4 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
 
 module Ondim.Extra.Loading where
 
@@ -33,9 +30,10 @@ loadFnToUpdate (LoadFn fn) fp name bs s =
     throw' = throw . TemplateLoadingException
     res = templateData' site $ either throw' id $ fn fp bs
 
-data LoadConfig = LoadConfig
+data LoadConfig n = LoadConfig
   { patterns :: [FilePattern],
-    loadFn :: LoadFn
+    loadFn :: LoadFn,
+    initialState :: OndimState n
   }
 
 {- | Load templates from a list of directories in descending order of priority,
@@ -46,17 +44,16 @@ loadTemplatesDynamic ::
   forall m n.
   (MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   -- | Loading configurations
-  [LoadConfig] ->
+  [LoadConfig n] ->
   -- | Places to look for templates, in descending order of priority.
   [FilePath] ->
-  -- | Initial state
-  OndimState n ->
   m (OndimState n, (OndimState n -> m ()) -> m ())
-loadTemplatesDynamic cfgs places initial =
+loadTemplatesDynamic cfgs places =
   let sources = fromList (zip (zip [1 ..] places) places)
       cfgMap = fromList $ [(i, f) | (i, loadFn -> f) <- zip [1 ..] cfgs]
       patts = [(i, p) | (i, patterns -> ps) <- zip [1 ..] cfgs, p <- ps]
       exclude = []
+      initial = foldMap' initialState cfgs
       handler :: Change (Int, FilePath) Int -> m (OndimState n -> OndimState n)
       handler chg =
         appEndo . mconcat . coerce . join
@@ -72,14 +69,14 @@ loadTemplatesDynamic cfgs places initial =
    in unionMount sources patts exclude initial handler
 
 -- | Load templates from a list of directories in descending order of priority.
-loadTemplates :: [LoadConfig] -> [FilePath] -> IO (OndimState n)
-loadTemplates cfgs dirs = fst <$> runNoLoggingT (loadTemplatesDynamic cfgs dirs mempty)
+loadTemplates :: [LoadConfig n] -> [FilePath] -> IO (OndimState n)
+loadTemplates cfgs dirs = fst <$> runNoLoggingT (loadTemplatesDynamic cfgs dirs)
 
 {- | Load templates in pure code from a list of filepaths and bytestrings. Meant
 to be used with the @file-embed@ package.
 -}
-loadTemplatesEmbed :: String -> [LoadConfig] -> [(FilePath, ByteString)] -> OndimState n
-loadTemplatesEmbed prefix cfgs files = foldr go mempty res
+loadTemplatesEmbed :: String -> [LoadConfig n] -> [(FilePath, ByteString)] -> OndimState n
+loadTemplatesEmbed prefix cfgs files = foldr go (foldMap' initialState cfgs) res
   where
     patts = [(loadFn c, p) | c <- cfgs, p <- patterns c]
     fdata = [((toLazy bs, fp), fp) | (fp, bs) <- files]

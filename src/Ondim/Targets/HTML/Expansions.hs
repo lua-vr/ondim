@@ -5,7 +5,7 @@ import Ondim.Extra.Exceptions (tryAttrFilter)
 import Ondim.Extra.Expansions
 import Ondim.Extra.Standard (attrSub, standardMap)
 import Ondim.Targets.HTML.Instances
-import Ondim.Targets.HTML.Load (parseT)
+import Ondim.Targets.HTML.Parser (parseT)
 import Text.XML qualified as X
 
 defaultState :: Monad m => OndimState m
@@ -17,10 +17,10 @@ defaultState =
   where
     exps = mapToNamespace do
       standardMap
-      "raw" ## \(node :: HtmlNode) -> do
+      "raw.html" ## \(node :: HtmlNode) -> do
         t <- lookupAttr' "text" node
         return [rawNode t]
-      "expanded" ## \(node :: HtmlNode) -> do
+      "expanded.html" ## \(node :: HtmlNode) -> do
         t <- parseT <$> lookupAttr' "text" node
         liftNodes $ toHtmlNodes $ X.elementNodes $ X.documentRoot t
     filts = mapToFilters do
