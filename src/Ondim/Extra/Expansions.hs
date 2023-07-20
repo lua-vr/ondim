@@ -1,6 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-
 -- | Useful library of expansions.
 module Ondim.Extra.Expansions where
 
@@ -140,9 +137,9 @@ switchWithDefault tag node = do
 
 renderExp ::
   forall m a b.
-  (HasCallStack,
-   GlobalConstraints m a,
-   OndimNode b
+  ( HasCallStack,
+    GlobalConstraints m a,
+    OndimNode b
   ) =>
   (Text -> Either String b) ->
   Expansion m a

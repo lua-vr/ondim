@@ -3,19 +3,18 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
 
 module Ondim.MultiWalk.Basic where
 
 import Control.Monad.Except (MonadError (..))
 import Control.MultiWalk.HasSub qualified as HS
 import Data.HashMap.Strict qualified as Map
+import Data.Text qualified as T
 import GHC.Exception (SrcLoc)
 import GHC.Exts qualified as GHC
 import {-# SOURCE #-} Ondim.MultiWalk.Class
-import Type.Reflection (SomeTypeRep, TypeRep, someTypeRep)
 import System.FilePath (takeExtensions)
-import qualified Data.Text as T
+import Type.Reflection (SomeTypeRep, TypeRep, someTypeRep)
 
 -- * Monad
 

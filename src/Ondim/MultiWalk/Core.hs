@@ -1,9 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
 
 module Ondim.MultiWalk.Core where
 
@@ -80,7 +76,8 @@ fromSomeExpansion callSite someExp =
       (NamespaceData ns@(Namespace n))
         | Just v <- HMap.lookup "" n -> v
         | FileDefinition _ ext <- callSite,
-          Just v <- lookupExpansion ext ns -> v
+          Just v <- lookupExpansion ext ns ->
+            v
       _nonNamespace -> someExp
 
 getTemplate :: forall m a. GlobalConstraints m a => Text -> Ondim m (Either OndimFailure [a])

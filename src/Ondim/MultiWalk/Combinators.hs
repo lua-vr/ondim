@@ -8,6 +8,7 @@ module Ondim.MultiWalk.Combinators
     Spec (..),
     SubSpec (..),
     SelSpec (..),
+
     -- ** Combinators
     Nesting,
     MatchWith,
@@ -17,10 +18,11 @@ module Ondim.MultiWalk.Combinators
     OneSub,
     Sequence,
     Custom,
+
     -- ** Internal
     CanLift (..),
     Substructure (..),
-    AllMods
+    AllMods,
   )
 where
 

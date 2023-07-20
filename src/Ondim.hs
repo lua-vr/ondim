@@ -1,6 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE UndecidableInstances #-}
-
 {- | This module defines a user-friendly API over the core functionality
  (implemented in Ondim.MultiWalk.Core).
 -}
@@ -52,7 +49,6 @@ module Ondim
 
     -- * State transformations
     module Ondim.MultiWalk.State,
-
     -- Get parts of the state
     getExpansion,
     getTemplate,
@@ -60,7 +56,6 @@ module Ondim
     getNamespace,
     getSomeMapFilter,
     getSomeFilter,
-
     -- Calling
     callExpansion,
     callTemplate,
@@ -87,9 +82,9 @@ where
 import Data.List qualified as L
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class
-import Ondim.MultiWalk.State
 import Ondim.MultiWalk.Combinators
 import Ondim.MultiWalk.Core
+import Ondim.MultiWalk.State
 import Ondim.MultiWalk.Substructure
 import Prelude hiding (All)
 
