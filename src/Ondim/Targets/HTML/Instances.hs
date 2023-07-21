@@ -15,7 +15,8 @@ import Ondim
 import Text.XML qualified as X
 
 newtype HtmlDocument = HtmlDocument {documentRoot :: HtmlElement}
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Ord, Show, Generic)
+  deriving anyclass (NFData)
 
 toHtmlDocument :: X.Document -> HtmlDocument
 toHtmlDocument = HtmlDocument . toHtmlElement . X.documentRoot
@@ -40,7 +41,7 @@ data HtmlElement = HtmlElement
     elementAttrs :: [Attribute],
     elementChildren :: ![HtmlNode]
   }
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Ord, Show, Generic, NFData)
 
 toHtmlElement :: X.Element -> HtmlElement
 toHtmlElement (X.Element name attrs nodes) =
@@ -76,7 +77,7 @@ data HtmlNode
   = Element HtmlElement
   | TextNode Text
   | RawNode Text
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Ord, Show, Generic, NFData)
 
 instance L.ToHtml HtmlNode where
   toHtml (Element el) = L.toHtml el

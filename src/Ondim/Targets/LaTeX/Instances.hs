@@ -11,7 +11,7 @@ data Node
   = Command Text [([Node], [Node])] [Node]
   | Text Text
   | Comment Text
-  deriving (Eq, Ord, Show, Generic)
+  deriving (Eq, Ord, Show, Generic, NFData)
 
 renderLaTeX :: [Node] -> Text
 renderLaTeX = foldMap go

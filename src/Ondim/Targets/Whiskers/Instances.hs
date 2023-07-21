@@ -9,7 +9,7 @@ data Node
   = Section Text [Attribute] [Node]
   | Single Text [Attribute]
   | Textual Text
-  deriving (Eq, Ord, Show, Generic)
+  deriving (Eq, Ord, Show, Generic, NFData)
 
 renderWhiskers :: [Node] -> Text
 renderWhiskers = foldMap go
