@@ -165,6 +165,7 @@ liftNode ::
   t ->
   Ondim m [t]
 liftNode node = do
+  inhibit <- Ondim $ asks inhibitErrors
   apFilters <-
     Ondim $
       gets $
@@ -174,13 +175,15 @@ liftNode node = do
           . filters
   apFilters $
     case identify node of
-      Just name -> expand name
-      _ -> one <$> liftSubstructures node
+      Just name ->
+        getExpansion name >>= \case
+          Right expansion -> expansion node
+          Left e
+            | inhibit -> continue
+            | otherwise -> throwExpFailure @t name e
+      _ -> continue
   where
-    expand name =
-      getExpansion name >>= \case
-        Right expansion -> expansion node
-        Left e -> throwExpFailure @t name e
+    continue = one <$> liftSubstructures node
 {-# INLINEABLE liftNode #-}
 
 -- | Lift a list of nodes, applying filters.

@@ -120,11 +120,16 @@ instance Semigroup (OndimState m) where
 -- * Exceptions
 
 -- | Data used for debugging purposes
-data TraceData = TraceData {depth :: Int, expansionTrace :: [(Text, DefinitionSite)], currentSite :: DefinitionSite}
+data TraceData = TraceData
+  { depth :: Int,
+    expansionTrace :: [(Text, DefinitionSite)],
+    currentSite :: DefinitionSite,
+    inhibitErrors :: Bool
+  }
   deriving (Eq, Show)
 
 initialTraceData :: TraceData
-initialTraceData = TraceData 0 [] NoDefinition
+initialTraceData = TraceData 0 [] NoDefinition False
 
 getCurrentSite :: Monad m => Ondim m DefinitionSite
 getCurrentSite = Ondim $ asks currentSite
@@ -168,6 +173,18 @@ data OndimFailure
 
 data OndimException = OndimException ExceptionType TraceData
   deriving (Show, Exception)
+
+-- | Run subcomputation without (most) "not bound" errors.
+withoutNBErrors :: Monad m => Ondim m a -> Ondim m a
+withoutNBErrors = Ondim . local f . unOndimT
+  where
+    f r = r {inhibitErrors = True}
+
+-- | Run subcomputation with "not bound" errors.
+withNBErrors :: Monad m => Ondim m a -> Ondim m a
+withNBErrors = Ondim . local f . unOndimT
+  where
+    f r = r {inhibitErrors = False}
 
 catchException ::
   Monad m =>

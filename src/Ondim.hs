@@ -35,6 +35,8 @@ module Ondim
     TraceData (..),
     ExceptionType (..),
     OndimException (..),
+    withoutNBErrors,
+    withNBErrors,
     throwTemplateError,
     throwException,
     catchException,
