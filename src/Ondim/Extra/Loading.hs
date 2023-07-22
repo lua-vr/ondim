@@ -1,5 +1,3 @@
-{-# LANGUAGE GADTs #-}
-
 module Ondim.Extra.Loading where
 
 import Control.Exception (throw)
@@ -16,23 +14,32 @@ newtype TemplateLoadingError = TemplateLoadingException String
   deriving (Eq, Show)
   deriving anyclass (Exception)
 
-data LoadFn where
-  LoadFn :: OndimNode a => (FilePath -> LByteString -> Either String a) -> LoadFn
+type LoadFn n =
+  -- | Filepath
+  FilePath ->
+  -- | File contents
+  LByteString ->
+  -- | (local, global)
+  (SomeExpansion n, Namespace n)
+
+loadFnSimple :: OndimNode a => (FilePath -> LByteString -> Either String a) -> LoadFn n
+loadFnSimple fn fp bs = (templateData' site $ either throw' id $ fn fp bs, mempty)
+  where
+    site = fileSite fp
+    throw' = throw . TemplateLoadingException
 
 fpToIdentifier :: FilePath -> Text
 fpToIdentifier = toText . intercalate "." . splitDirectories
 
-loadFnToUpdate :: LoadFn -> FilePath -> Text -> LByteString -> OndimState n -> OndimState n
-loadFnToUpdate (LoadFn fn) fp name bs s =
-  s {expansions = insertExpansion name res (expansions s)}
+loadFnToUpdate :: LoadFn n -> FilePath -> Text -> LByteString -> OndimState n -> OndimState n
+loadFnToUpdate fn fp name bs s =
+  s {expansions = snd res <> insertExpansion name (fst res) (expansions s)}
   where
-    site = fileSite fp
-    throw' = throw . TemplateLoadingException
-    res = templateData' site $ either throw' id $ fn fp bs
+    res = fn fp bs
 
 data LoadConfig n = LoadConfig
   { patterns :: [FilePattern],
-    loadFn :: LoadFn,
+    loadFn :: LoadFn n,
     initialState :: OndimState n
   }
 

@@ -2,7 +2,7 @@
 
 module Ondim.Targets.Whiskers.Load where
 
-import Ondim.Extra.Loading (LoadConfig (..), LoadFn (..))
+import Ondim.Extra.Loading (LoadConfig (..), LoadFn, TemplateLoadingError (..), loadFnSimple)
 import Ondim.Targets.Whiskers.Expansions (defaultState)
 import Ondim.Targets.Whiskers.Parser (parseWhiskers)
 
@@ -11,4 +11,4 @@ loadWhiskers d = LoadConfig {..}
   where
     patterns = ["**/*.w.*"]
     initialState = defaultState
-    loadFn = LoadFn \fp bs -> parseWhiskers d fp $ decodeUtf8 bs
+    loadFn = loadFnSimple \fp bs -> parseWhiskers d fp $ decodeUtf8 bs

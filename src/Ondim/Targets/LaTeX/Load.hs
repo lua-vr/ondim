@@ -2,7 +2,7 @@
 
 module Ondim.Targets.LaTeX.Load where
 
-import Ondim.Extra.Loading (LoadConfig (..), LoadFn (..))
+import Ondim.Extra.Loading (LoadConfig (..), loadFnSimple)
 import Ondim.Targets.LaTeX.Expansions (defaultState)
 import Ondim.Targets.LaTeX.Parser (parseLaTeX)
 
@@ -11,4 +11,4 @@ loadLaTeX = LoadConfig {..}
   where
     patterns = ["**/*.tex"]
     initialState = defaultState
-    loadFn = LoadFn \fp bs -> parseLaTeX fp $ decodeUtf8 bs
+    loadFn = loadFnSimple \fp bs -> parseLaTeX fp $ decodeUtf8 bs
