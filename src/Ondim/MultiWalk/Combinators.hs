@@ -10,6 +10,8 @@ module Ondim.MultiWalk.Combinators
     SelSpec (..),
 
     -- ** Combinators
+    NL,
+    NodeList,
     Nesting,
     MatchWith,
     Conversible (..),
@@ -18,6 +20,7 @@ module Ondim.MultiWalk.Combinators
     OneSub,
     Sequence,
     Custom,
+    ModSub,
 
     -- ** Internal
     CanLift (..),
@@ -26,47 +29,49 @@ module Ondim.MultiWalk.Combinators
   )
 where
 
-import Control.MultiWalk.HasSub (AllMods, SelSpec, Spec (..), SubSpec (..))
+import Control.MultiWalk.HasSub (AllMods, GSubTag, SelSpec, Spec (..), SubSpec (..))
 import Control.MultiWalk.HasSub qualified as HS
-import Data.Text qualified as T
-import Data.Typeable (eqT, (:~:) (..))
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class (OndimNode (..))
 import Ondim.MultiWalk.Core
 import Ondim.MultiWalk.Substructure
+import Type.Errors qualified as TE
 
 type family CombinatorCarrier (b :: Type) :: Type where
+  CombinatorCarrier (NodeList a) = [a]
   CombinatorCarrier (Nesting b) = b
   CombinatorCarrier (MatchWith s _) = s
   CombinatorCarrier (OneSub a) = a
   CombinatorCarrier (Trav f a) = f (Carrier a)
   CombinatorCarrier (Converting b _) = b
   CombinatorCarrier (Sequence a _) = Carrier a
-  CombinatorCarrier (List a) = [a]
   CombinatorCarrier (Custom b tag) = b
-  CombinatorCarrier a = [a]
+  CombinatorCarrier (ModSub b _) = b
+  CombinatorCarrier a = TE.TypeError ('TE.Text "The type " 'TE.:<>: TE.ShowTypeQuoted a 'TE.:<>: 'TE.Text " is not a valid combinator.")
 
 type instance HS.Carrier OCTag a = CombinatorCarrier a
 
 -- Definitions
 
-data Custom b tag
+-- | Shorthand for 'NodeList'
+type NL = NodeList
 
-data List a
+-- | @'NodeList' a@ matches @[a]@ where @a@ is a 'OndimNode'
+data NodeList a
 
-instance (OndimNode a) => CanLift (List a) where
+instance (OndimNode a) => CanLift (NodeList a) where
   liftSub = liftNodes
 
-instance (OndimNode a) => OndimNode [a] where
-  type ExpTypes [a] = 'SpecSelf (List a)
-  castFrom p = (one .) <$> castFrom p
-  castTo (p :: Proxy t)
-    | Just Refl <- eqT @t @a = Just id
-    | otherwise = foldMap' <$> castTo p
+instance Substructure a (NodeList a) where
+  getSub = id
 
-{- | Use this for matching with another type that is coercible to the functor
-you want.
--}
+instance (OndimNode a) => OndimNode [a] where
+  type ExpTypes [a] = 'SpecSelf (NodeList a)
+  castFrom p = (one .) <$> castFrom p
+  renderNode = foldMap' <$> renderNode
+  nodeAsText = foldMap' <$> nodeAsText
+
+-- | @'MatchWith' s a@ matches a type @s@ that is coercible to the 'Carrier' of @a@
 data MatchWith (s :: Type) (a :: Type)
 
 instance
@@ -83,10 +88,10 @@ instance
   ) =>
   Substructure s (MatchWith b a)
   where
-  getSubs = getSubs @s @a . coerce
+  getSub = getSub @s @a . coerce
 
-{- | If your type is not within a list but is a monoid, you can use this and
-pretend it's a list.
+{- | If your type is not within a NodeList but is a monoid, you can use this and
+pretend it's a NodeList.
 -}
 data OneSub (a :: Type)
 
@@ -106,7 +111,7 @@ instance
   ) =>
   Substructure k (OneSub a)
   where
-  getSubs = getSubs @k @a . one
+  getSub = getSub @k @a . one
 
 -- | Use this for matching with a type inside a traversable functor.
 data Trav (f :: Type -> Type) (a :: Type)
@@ -125,7 +130,7 @@ instance
   ) =>
   Substructure s (Trav f a)
   where
-  getSubs = foldMap (getSubs @s @a)
+  getSub = foldMap (getSub @s @a)
 
 -- | Use this for matching a subcomponent nested inside another type.
 data Nesting (b :: Type)
@@ -143,7 +148,7 @@ instance
   ) =>
   Substructure k (Nesting b)
   where
-  getSubs = getSubstructure
+  getSub = getSubstructure
 
 data Converting a b
 
@@ -165,7 +170,7 @@ instance
   ) =>
   Substructure k (Converting s a)
   where
-  getSubs = getSubs @k @a . convertTo
+  getSub = getSub @k @a . convertTo
 
 data Sequence a b
 
@@ -185,10 +190,24 @@ instance
   ) =>
   Substructure k (Sequence a b)
   where
-  getSubs x = getSubs @k @a x <> getSubs @k @b x
+  getSub x = getSub @k @a x <> getSub @k @b x
 
--- Somewhat lost instances
+data Custom b tag
 
-instance OndimNode Attribute where
-  type ExpTypes Attribute = 'SpecList '[ToSpec (OneSub Text)]
-  identify ~(name, _) = T.stripPrefix "e:" name
+data ModSub needle (spec :: [SubSpec])
+
+instance
+  ( AllMods CanLift ('SpecList spec),
+    HasSub GSubTag ('SpecList spec) needle
+  ) =>
+  CanLift (ModSub needle (spec :: [SubSpec]))
+  where
+  liftSub = modSubLift @('SpecList spec)
+
+instance
+  ( AllMods (Substructure t) ('SpecList spec),
+    HasSub GSubTag ('SpecList spec) needle
+  ) =>
+  Substructure t (ModSub needle (spec :: [SubSpec]))
+  where
+  getSub = getSubstructure' @t @('SpecList spec)

@@ -1,7 +1,7 @@
 module Ondim.Targets.Pandoc.Expansions where
 
 import Ondim
-import Ondim.Extra.Standard (attrSub, standardMap)
+import Ondim.Extra.Standard (standardMap)
 import Ondim.Targets.Pandoc.Instances ()
 import Text.Pandoc (Block (..), ListNumberDelim (..), ListNumberStyle (..))
 
@@ -9,7 +9,7 @@ defaultState :: Monad m => OndimState m
 defaultState =
   OndimState
     { expansions = exps,
-      filters = filts
+      filters = mempty
     }
   where
     exps = mapToNamespace do
@@ -58,5 +58,3 @@ defaultState =
                       ] -> Just (ils, [blks])
                   _ -> Nothing
             return [DefinitionList child]
-    filts = mapToFilters do
-      "attrSub" $* attrSub '!' ('(', ')')

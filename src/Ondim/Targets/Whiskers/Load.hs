@@ -2,7 +2,7 @@
 
 module Ondim.Targets.Whiskers.Load where
 
-import Ondim.Extra.Loading (LoadConfig (..), LoadFn, TemplateLoadingError (..), loadFnSimple)
+import Ondim.Extra.Loading (LoadConfig (..), loadFnSimple)
 import Ondim.Targets.Whiskers.Expansions (defaultState)
 import Ondim.Targets.Whiskers.Parser (parseWhiskers)
 

@@ -9,7 +9,6 @@ module Ondim.Extra.Standard
     scope,
     call,
     bind,
-    attrSub,
   ) where
 
 import Data.Text qualified as T
@@ -123,25 +122,3 @@ bind node = do
       putSomeExpansion name $ templateData' defSite thing
       pure []
     Nothing -> throwTemplateError "No name for expansion"
-
--- * String interpolation
-
--- | Simple text interpolation ${name}.
-attrEdit :: Monad m => Char -> (Char, Char) -> Text -> Ondim m Text
-attrEdit start delims = go
-  where
-    go text = do
-      let (beg, rest0) = T.break (== start) text
-      (beg <>) <$> case T.uncons rest0 of
-        Just (_, rest1)
-          | Just (c0, rest2) <- T.uncons rest1,
-            c0 == fst delims,
-            let (name, rest3) = T.break (== snd delims) rest2,
-            Just (_, rest4) <- T.uncons rest3 -> do
-              res <- callTemplateFold name
-              (res <>) <$> go rest4
-          | otherwise -> T.cons start <$> go rest1
-        _noStartChar -> return mempty
-
-attrSub :: Monad m => Char -> (Char, Char) -> MapFilter m Text
-attrSub start delims t = mapM (attrEdit start delims) =<< t

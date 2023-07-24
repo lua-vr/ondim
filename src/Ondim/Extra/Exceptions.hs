@@ -2,7 +2,6 @@
 
 module Ondim.Extra.Exceptions
   ( tryExp,
-    tryAttrFilter,
     exceptionExp,
     prettyException,
   ) where
@@ -13,12 +12,6 @@ import Ondim.Extra.Expansions (listExp)
 
 tryExp :: Monad m => GlobalExpansion m
 tryExp node = liftChildren node `catchFailure` \_ _ _ _ -> return []
-
-tryAttrFilter :: Monad m => Filter m Attribute
-tryAttrFilter (k, _) x
-  | Just k' <- "?" `T.stripSuffix` k =
-      first (const k') <<$>> x `catchFailure` \_ _ _ _ -> return []
-  | otherwise = x
 
 exceptionExp :: Monad m => OndimException -> ExpansionMap m
 exceptionExp exc@(OndimException e t) = do
@@ -61,7 +54,6 @@ exceptionExp exc@(OndimException e t) = do
       "name" #@ name
       "site" #. locExp loc
 
-
 prettyException :: OndimException -> Text
 prettyException (OndimException e t) =
   eMsg <> "\n\n" <> "While expanding " <> loc <> "\n" <> "Expansion stack:\n" <> eStack
@@ -71,8 +63,10 @@ prettyException (OndimException e t) =
       NoDefinition -> "undefined location"
       FileDefinition fp _ -> "file " <> show fp
       CodeDefinition c -> "code location " <> toText (prettySrcLoc c)
-    eStack = T.unlines $ expansionTrace t <&> \(name, l) ->
-      "'" <> name <> "' from " <> loc' l
+    eStack =
+      T.unlines $
+        expansionTrace t <&> \(name, l) ->
+          "'" <> name <> "' from " <> loc' l
     eMsg = case e of
       MaxExpansionDepthExceeded ->
         "Maximum expansion depth exceeded. Did you write something recursive?\n"

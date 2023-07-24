@@ -54,6 +54,9 @@ module Ondim.MultiWalk.State
     lookupExpansion,
     insertExpansion,
     deleteExpansion,
+    lookupExpansion',
+    insertExpansion',
+    deleteExpansion',
   )
 where
 
@@ -63,8 +66,8 @@ import Data.HashMap.Strict qualified as HMap
 import Data.Map qualified as Map
 import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
-import Type.Reflection (typeRep)
 import Ondim.MultiWalk.Class (OndimNode)
+import Type.Reflection (typeRep)
 
 -- * User API
 
@@ -261,8 +264,8 @@ bindingFilters o filts =
 splitExpansionKey :: Text -> [Text]
 splitExpansionKey = T.split (\c -> c /= '-' && not (isLetter c))
 
-lookupExpansion :: Text -> Namespace m -> Maybe (SomeExpansion m)
-lookupExpansion (splitExpansionKey -> keys) (Namespace e) = go keys e
+lookupExpansion' :: [Text] -> Namespace m -> Maybe (SomeExpansion m)
+lookupExpansion' keys (Namespace e) = go keys e
   where
     go [] _ = Nothing
     go [k] m = HMap.lookup k m
@@ -270,8 +273,11 @@ lookupExpansion (splitExpansionKey -> keys) (Namespace e) = go keys e
       Just (NamespaceData (Namespace n)) -> go ks n
       _ -> Nothing
 
-insertExpansion :: Text -> SomeExpansion m -> Namespace m -> Namespace m
-insertExpansion (splitExpansionKey -> keys) e (Namespace es) = Namespace $ go keys es
+lookupExpansion :: Text -> Namespace m -> Maybe (SomeExpansion m)
+lookupExpansion = lookupExpansion' . splitExpansionKey
+
+insertExpansion' :: [Text] -> SomeExpansion m -> Namespace m -> Namespace m
+insertExpansion' keys e (Namespace es) = Namespace $ go keys es
   where
     go [] = id
     go [k] = HMap.insert k e
@@ -281,12 +287,23 @@ insertExpansion (splitExpansionKey -> keys) e (Namespace es) = Namespace $ go ke
           Just (NamespaceData (Namespace n)) -> go ks n
           _ -> go ks mempty
 
-deleteExpansion :: Text -> Namespace m -> Namespace m
-deleteExpansion (splitExpansionKey -> keys) (Namespace es) = Namespace $ go keys es
+insertExpansion :: Text -> SomeExpansion m -> Namespace m -> Namespace m
+insertExpansion = insertExpansion' . splitExpansionKey
+
+deleteExpansion' :: [Text] -> Namespace m -> Namespace m
+deleteExpansion' keys v@(Namespace es) =
+  case keys of
+    [] -> v
+    [k] -> Namespace $ HMap.delete k es
+    (k : ks) -> Namespace $ go ks k es
   where
-    go [] = id
-    go [k] = HMap.delete k
-    go (k : ks) = flip HMap.alter k \case
-      Just (NamespaceData (Namespace n)) ->
-        Just $ NamespaceData $ Namespace $ go ks n
-      _ -> Nothing
+    go ks = HMap.update \case
+      (NamespaceData n) ->
+        case deleteExpansion' ks n of
+          x@(Namespace hmap)
+            | HMap.null hmap -> Nothing
+            | otherwise -> Just $ NamespaceData x
+      x -> Just x
+
+deleteExpansion :: Text -> Namespace m -> Namespace m
+deleteExpansion = deleteExpansion' . splitExpansionKey

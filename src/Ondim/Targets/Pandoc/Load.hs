@@ -2,10 +2,9 @@
 
 module Ondim.Targets.Pandoc.Load where
 
-import Ondim.Extra.Loading (LoadConfig (..))
+import Ondim.Extra.Loading (LoadConfig (..), loadFnSimple)
 import Ondim.Targets.Pandoc.Expansions (defaultState)
 import Ondim.Targets.Pandoc.Instances ()
-import Ondim.Targets.Whiskers.Load (loadFnWhiskers)
 import Text.Pandoc.Class (runPure)
 import Text.Pandoc.Error (renderError)
 import Text.Pandoc.Extensions (Extension (..), disableExtensions, extensionsFromList, pandocExtensions)
@@ -22,7 +21,7 @@ loadPandocMd = LoadConfig {..}
         extensionsFromList
           [ Ext_auto_identifiers
           ]
-    loadFn = loadFnWhiskers ("!(", ")") \_ bs ->
+    loadFn = loadFnSimple \_ bs ->
       first (toString . renderError) $
         runPure $
           readMarkdown def {readerExtensions = ext} (decodeUtf8 bs :: Text)

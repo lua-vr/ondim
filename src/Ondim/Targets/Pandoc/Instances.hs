@@ -8,12 +8,19 @@ import Data.Map qualified as Map
 import Data.Text qualified as T
 import Data.Typeable (eqT, type (:~:) (..))
 import Ondim
+import Ondim.Extra.Substitution (SAttr, SAttrs, SText, SubstConfig (..), getSAttributes)
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Definition
 import Text.Pandoc.Walk
 
 getId :: [Text] -> Maybe Text
 getId = asum . map (T.stripPrefix "e:")
+
+type PSConfig = 'SubstConfig '!' '(' ')'
+
+type PText = SText PSConfig
+type PAttr = SAttr PSConfig
+type PAttrs = SAttrs PSConfig
 
 data MetaMapLift
 
@@ -30,18 +37,8 @@ instance CanLift MetaMapSub where
         | otherwise = Just . (k,) <$> liftSubstructures v
 
 instance OndimNode Pandoc where
-  type ExpTypes Pandoc = 'SpecList '[ToSpec Block, ToSpec (Nesting Meta)]
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Block = Just $ \case
-        (Pandoc _ b) -> b
-    | Just Refl <- eqT @t @Inline = Just $ \case
-        (Pandoc _ (Para i : _)) -> i
-        _ -> []
-    | Just Refl <- eqT @t @MetaValue = Just $ \case
-        (Pandoc _ (Para i : _)) -> [MetaInlines i]
-        _ -> []
-    | Just Refl <- eqT @t @Rendered = Just $ one . encode
-    | otherwise = Nothing
+  type ExpTypes Pandoc = 'SpecList '[ToSpec (NL Block), ToSpec (Nesting Meta)]
+  renderNode = Just encode
 
 instance OndimNode Meta where
   type ExpTypes Meta = 'SpecList '[ToSpec MetaMapSub]
@@ -51,10 +48,10 @@ instance OndimNode MetaValue where
     ExpTypes MetaValue =
       'SpecList
         '[ ToSpecSel ('ConsSel "MetaMap") MetaMapSub,
-           ToSpecSel ('ConsSel "MetaList") MetaValue,
-           ToSpecSel ('ConsSel "MetaString") (OneSub Text),
-           ToSpecSel ('ConsSel "MetaInlines") Inline,
-           ToSpecSel ('ConsSel "MetaBlocks") Block
+           ToSpecSel ('ConsSel "MetaList") (NL MetaValue),
+           ToSpecSel ('ConsSel "MetaString") PText,
+           ToSpecSel ('ConsSel "MetaInlines") (NL Inline),
+           ToSpecSel ('ConsSel "MetaBlocks") (NL Block)
          ]
   identify (MetaMap o)
     | Just (MetaInlines [Str name]) <- Map.lookup "$" o = Just name
@@ -63,7 +60,7 @@ instance OndimNode MetaValue where
   children (MetaMap o)
     | Just (MetaList a) <- Map.lookup "$args" o = a
   children _ = []
-  attributes (MetaMap o) = liftNodes $ Map.foldrWithKey go [] o
+  attributes (MetaMap o) = liftSub @PAttrs $ Map.foldrWithKey go [] o
     where
       go k (MetaString t) a = (k, t) : a
       go _ _ a = a
@@ -71,94 +68,94 @@ instance OndimNode MetaValue where
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . MetaString
     | Just Refl <- eqT @t @[Inline] = Just $ one . MetaInlines
+    | Just Refl <- eqT @t @Pandoc = Just $ \case
+        (Pandoc _ (Para i : _)) -> [MetaInlines i]
+        _ -> []
     | otherwise = Nothing
 
 instance OndimNode ([Inline], [[Block]]) where
   type
     ExpTypes ([Inline], [[Block]]) =
       'SpecList
-        '[ ToSpec Inline,
-           ToSpec (Trav [] Block)
+        '[ ToSpec (NL Inline),
+           ToSpec (Trav [] (NL Block))
          ]
 
 instance OndimNode Caption where
   type
     ExpTypes Caption =
       'SpecList
-        '[ ToSpec (Trav Maybe Inline),
-           ToSpec Block
+        '[ ToSpec (Trav Maybe (NL Inline)),
+           ToSpec (NL Block)
          ]
 
 instance OndimNode TableHead where
   type
     ExpTypes TableHead =
       'SpecList
-        '[ ToSpec (Converting Attr Attribute),
-           ToSpec Row
+        '[ ToSpec (Converting Attr PAttrs),
+           ToSpec (NL Row)
          ]
 
 instance OndimNode TableFoot where
   type
     ExpTypes TableFoot =
       'SpecList
-        '[ ToSpec (Converting Attr Attribute),
-           ToSpec Row
+        '[ ToSpec (Converting Attr PAttrs),
+           ToSpec (NL Row)
          ]
 
 instance OndimNode TableBody where
   type
     ExpTypes TableBody =
       'SpecList
-        '[ ToSpec (Converting Attr Attribute),
-           ToSpec Row
+        '[ ToSpec (Converting Attr PAttrs),
+           ToSpec (NL Row)
          ]
 
 instance OndimNode Row where
   type
     ExpTypes Row =
       'SpecList
-        '[ ToSpec (Converting Attr Attribute),
-           ToSpec Cell
+        '[ ToSpec (Converting Attr PAttrs),
+           ToSpec (NL Cell)
          ]
 
 instance OndimNode Cell where
   type
     ExpTypes Cell =
       'SpecList
-        '[ ToSpec (Converting Attr Attribute),
-           ToSpec Block
+        '[ ToSpec (Converting Attr PAttrs),
+           ToSpec (NL Block)
          ]
 
 instance OndimNode Block where
   type
     ExpTypes Block =
       'SpecList
-        '[ ToSpec Inline,
-           ToSpec (Trav [] Inline),
-           ToSpec Block,
-           ToSpec (Trav [] Block),
+        '[ ToSpec (NL Inline),
+           ToSpec (Trav [] (NL Inline)),
+           ToSpec (NL Block),
+           ToSpec (Trav [] (NL Block)),
            ToSpec (Trav [] (Nesting ([Inline], [[Block]]))),
            ToSpec (Nesting Caption),
            ToSpec (Nesting TableHead),
-           ToSpec TableBody,
+           ToSpec (NL TableBody),
            ToSpec (Nesting TableFoot),
-           ToSpec (Converting Attr Attribute),
-           ToSpec (MatchWith Format (OneSub Text)),
-           ToSpec (OneSub Text)
+           ToSpec (Converting Attr PAttrs),
+           ToSpec (MatchWith Format PText),
+           ToSpec PText
          ]
   identify (Div (_, n, _) _) = getId n
   identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
   children = specChildren
-  attributes = specAttributes
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Text = Just $ one . stringify @Block
-    | Just Refl <- eqT @t @Inline = Just $ \case
-        (Para i) -> i
-        _ -> []
-    | otherwise = Nothing
+  attributes = getSAttributes @PSConfig
+  nodeAsText = Just $ stringify @Block
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @[Inline] = Just $ one . Plain
+    | Just Refl <- eqT @t @Pandoc = Just $ \case
+        (Pandoc _ b) -> b
     | otherwise = Nothing
 
 instance Conversible Attr [Attribute] where
@@ -176,31 +173,35 @@ instance OndimNode Citation where
   type
     ExpTypes Citation =
       'SpecList
-        '[ ToSpec (OneSub Text),
-           ToSpec Inline
+        '[ ToSpec PText,
+           ToSpec (NL Inline)
          ]
 
 instance OndimNode Inline where
   type
     ExpTypes Inline =
       'SpecList
-        '[ ToSpec Inline,
-           ToSpec Block,
-           ToSpec (Converting Attr Attribute),
-           ToSpec (OneSub Text),
-           ToSpec Citation,
-           ToSpec (MatchWith Format (OneSub Text)),
-           ToSpec (Nesting Target)
+        '[ ToSpec (NL Inline),
+           ToSpec (NL Block),
+           ToSpec (Converting Attr PAttrs),
+           ToSpec PText,
+           ToSpec (NL Citation),
+           ToSpec (MatchWith Format PText),
+           ToSpec PAttr
          ]
   identify (Span (_, n, _) _) = getId n
   identify _ = Nothing
   children = specChildren
-  attributes = specAttributes
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Text = Just $ one . stringify @Inline
-    | otherwise = Nothing
+  attributes = getSAttributes @PSConfig
+  nodeAsText = Just $ stringify @Inline
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ toList . B.text
+    | Just Refl <- eqT @t @Pandoc = Just $ \case
+        (Pandoc _ (Para i : _)) -> i
+        _ -> []
+    | Just Refl <- eqT @t @Block = Just $ \case
+        (Para i) -> i
+        _ -> []
     | otherwise = Nothing
 
 -- Miscellaneous (from Text.Pandoc.Shared)

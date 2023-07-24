@@ -28,8 +28,7 @@ module Ondim
     evalOndimT,
 
     -- * Rendering
-    Rendered,
-    renderNode,
+    renderNodeOrError,
 
     -- * Exceptions
     TraceData (..),
@@ -47,7 +46,6 @@ module Ondim
     getCurrentSite,
     fileSite,
     callStackSite,
-    withSite,
 
     -- * State transformations
     module Ondim.MultiWalk.State,
@@ -58,10 +56,13 @@ module Ondim
     getNamespace,
     getSomeMapFilter,
     getSomeFilter,
+    getTemplate',
+    getText,
+    getText',
     -- Calling
     callExpansion,
     callTemplate,
-    callTemplateFold,
+    callText,
 
     -- * Node lifting
     liftNode,
@@ -73,7 +74,6 @@ module Ondim
     getSubstructure,
     liftChildren,
     specChildren,
-    specAttributes,
     lookupAttr,
 
     -- * Auxiliary
@@ -125,12 +125,10 @@ liftChildren ::
   Expansion m t
 liftChildren = liftNodes . children
 
-type Rendered = LByteString
-
-renderNode :: (HasCallStack, Monad m) => OndimNode a => a -> Ondim m Rendered
-renderNode =
-  case castTo Proxy of
-    Just render -> return . mconcat . render
+renderNodeOrError :: (HasCallStack, Monad m) => OndimNode a => a -> Ondim m LByteString
+renderNodeOrError =
+  case renderNode of
+    Just render -> return . render
     Nothing -> const $ throwTemplateError "This type cannot be rendered."
 
 -- | You can use this as a default instance for the 'children' class method.
@@ -141,10 +139,6 @@ specChildren ::
 specChildren = getSubstructure
 
 -- Attributes
-
--- | You can use this as a default instance for the 'attributes' class method.
-specAttributes :: (OndimNode t, AllMods (Substructure Attribute) (ExpTypes t), Monad m) => t -> Ondim m [Attribute]
-specAttributes = liftNodes . getSubstructure @Attribute
 
 lookupAttr ::
   (Monad m, OndimNode t) =>
@@ -160,10 +154,10 @@ callTemplate name = do
   either (throwExpFailure @t name) return exps
 
 -- | Either applies template 'name', or throws an error if it does not exist.
-callTemplateFold :: forall t m. (Monoid t, GlobalConstraints m t) => Text -> Ondim m t
-callTemplateFold name = do
-  exps <- getTemplateFold name
-  either (throwExpFailure @t name) return exps
+callText :: Monad m => Text -> Ondim m Text
+callText name = do
+  exps <- getText name
+  either (throwExpFailure @Text name) return exps
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
 callExpansion :: forall t m. GlobalConstraints m t => Text -> Expansion m t

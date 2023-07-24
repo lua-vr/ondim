@@ -52,6 +52,7 @@ library
     Ondim.Extra.Expansions
     Ondim.Extra.Loading
     Ondim.Extra.Standard
+    Ondim.Extra.Substitution
 
   other-modules:
     Ondim.MultiWalk.Basic
@@ -71,6 +72,7 @@ library
     , multiwalk
     , relude
     , text
+    , type-errors
     , unionmount
     , unliftio-core
     , unordered-containers

@@ -9,6 +9,12 @@ import Data.Aeson.KeyMap qualified as KM
 import Data.Text qualified as T
 import Data.Typeable (eqT, (:~:) (..))
 import Ondim
+import Ondim.Extra.Substitution (SAttr, SAttrs, SText, SubstConfig (..))
+
+type ASConfig = 'SubstConfig '$' '{' '}'
+type AesonText = SText ASConfig
+type AesonAttr = SAttr ASConfig
+type AesonAttrs = SAttrs ASConfig
 
 instance Conversible Array [Value] where
   convertTo = toList
@@ -33,8 +39,8 @@ instance OndimNode Value where
     ExpTypes Value =
       'SpecList
         '[ ToSpecSel ('ConsSel "Object") ObjectSub,
-           ToSpecSel ('ConsSel "String") Text,
-           ToSpecSel ('ConsSel "Array") (Converting Array Value)
+           ToSpecSel ('ConsSel "String") AesonText,
+           ToSpecSel ('ConsSel "Array") (Converting Array (NL Value))
          ]
   identify (Object o)
     | Just (String name) <- KM.lookup "$" o = Just name
@@ -42,7 +48,7 @@ instance OndimNode Value where
   children (Object o)
     | Just (Array a) <- KM.lookup "$args" o = toList a
   children _ = []
-  attributes (Object o) = liftNodes $ KM.foldrWithKey go [] o
+  attributes (Object o) = liftSub @AesonAttrs $ KM.foldrWithKey go [] o
     where
       go k (String t) a = (K.toText k, t) : a
       go _ _ a = a
@@ -50,9 +56,7 @@ instance OndimNode Value where
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . String
     | otherwise = Nothing
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Text = Just \case
-        String t -> [t]
-        _notString -> mempty
-    | Just Refl <- eqT @t @Rendered = Just $ one . encode
-    | otherwise = Nothing
+  nodeAsText = Just \case
+    String t -> t
+    _notString -> mempty
+  renderNode = Just encode

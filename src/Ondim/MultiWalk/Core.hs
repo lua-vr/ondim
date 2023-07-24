@@ -22,9 +22,6 @@ class CanLift (s :: Type) where
     Carrier s ->
     Ondim m (Carrier s)
 
-instance {-# OVERLAPPABLE #-} (Carrier a ~ [a], OndimNode a) => CanLift a where
-  liftSub = liftNodes
-
 -- Get stuff from state
 
 fromTemplate ::
@@ -72,6 +69,8 @@ fromSomeExpansion callSite someExp =
       return (templateToExpansion thing, site)
     NamespaceData {} -> Left $ ExpansionWrongType (someTypeRep (Proxy @Namespace))
   where
+    -- The empty string "" acts as a default expansion for the namespace.
+    -- When calling from a file, the file extension also acts as a default.
     someExp' = case someExp of
       (NamespaceData ns@(Namespace n))
         | Just v <- HMap.lookup "" n -> v
@@ -80,14 +79,32 @@ fromSomeExpansion callSite someExp =
             v
       _nonNamespace -> someExp
 
-getTemplate :: forall m a. GlobalConstraints m a => Text -> Ondim m (Either OndimFailure [a])
-getTemplate name = do
-  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
+getText' :: forall m. Monad m => [Text] -> Ondim m (Either OndimFailure Text)
+getText' name = do
+  mbValue <- Ondim $ gets (lookupExpansion' name . expansions)
+  case mbValue of
+    Just (Template site (thing :: a))
+      | Just HRefl <- typeRep @Text `eqTypeRep` typeRep @a -> return $ Right thing
+      | Just cast <- nodeAsText -> Right . cast <$> withSite site (liftSubstructures thing)
+      | otherwise -> return $ Left $ TemplateWrongType (SomeTypeRep $ typeRep @a)
+     -- bimapM return id $ fromTemplate site thing
+    Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
+    Nothing -> return $ Left NotBound
+
+getText :: forall m. Monad m => Text -> Ondim m (Either OndimFailure Text)
+getText = getText' . splitExpansionKey
+
+getTemplate' :: forall m a. GlobalConstraints m a => [Text] -> Ondim m (Either OndimFailure [a])
+getTemplate' name = do
+  mbValue <- Ondim $ gets (lookupExpansion' name . expansions)
   case mbValue of
     Just (Template site thing) ->
       bimapM return id $ fromTemplate site thing
     Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
     Nothing -> return $ Left NotBound
+
+getTemplate :: GlobalConstraints m a => Text -> Ondim m (Either OndimFailure [a])
+getTemplate = getTemplate' . splitExpansionKey
 
 getTemplateFold :: (Monoid a, GlobalConstraints m a) => Text -> Ondim m (Either OndimFailure a)
 getTemplateFold name = second mconcat <$> getTemplate name

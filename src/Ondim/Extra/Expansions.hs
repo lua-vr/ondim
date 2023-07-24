@@ -61,7 +61,7 @@ listList f list node = do
       Nothing -> return liftChildren
   intercalateWith <- lookupAttr "intercalate" node
   let inter txt
-        | Just cast <- castFrom Proxy = intercalate (cast txt)
+        | Just cast <- ondimCast = intercalate (cast txt)
         | otherwise = join
       join' = maybe join inter intercalateWith
   withSomeExpansion alias Nothing $
@@ -150,12 +150,12 @@ renderExp f node = do
     noRender = throwTemplateError "source is missing cast to rendered!"
     noCast = throwTemplateError "target is missing cast from text!"
     convert x = do
-      case castTo Proxy of
+      case renderNode of
         Just render ->
-          case castFrom Proxy of
+          case ondimCast of
             Just cast -> do
               x' <- liftSubstructures x
-              let t = foldMap' (decodeUtf8 @Text @Rendered) (render x')
+              let t = decodeUtf8 @Text (render x')
               return $ cast t
             Nothing -> noCast
         Nothing -> noRender

@@ -23,11 +23,10 @@ instance OndimNode Node where
   type
     ExpTypes Node =
       'SpecList
-        '[ ToSpec Attribute,
-           ToSpec Node
+        '[ ToSpec (NL Node)
          ]
   children = specChildren
-  attributes = specAttributes
+  attributes = return . getSubstructure
   identify = \case
     Section t _ _ -> Just t
     Single t _ -> Just t
@@ -35,7 +34,5 @@ instance OndimNode Node where
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . Textual
     | otherwise = Nothing
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Text = Just $ one . renderWhiskers . one
-    | Just Refl <- eqT @t @Rendered = Just $ one . encodeUtf8 . renderWhiskers . one
-    | otherwise = Nothing
+  renderNode = Just $ encodeUtf8 . renderWhiskers . one
+  nodeAsText = Just $ renderWhiskers . one

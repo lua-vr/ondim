@@ -1,9 +1,8 @@
 module Ondim.Targets.HTML.Expansions where
 
 import Ondim
-import Ondim.Extra.Exceptions (tryAttrFilter)
 import Ondim.Extra.Expansions
-import Ondim.Extra.Standard (attrSub, standardMap)
+import Ondim.Extra.Standard (standardMap)
 import Ondim.Targets.HTML.Instances
 import Ondim.Targets.HTML.Parser (parseT)
 import Text.XML qualified as X
@@ -12,7 +11,7 @@ defaultState :: Monad m => OndimState m
 defaultState =
   OndimState
     { expansions = exps,
-      filters = filts
+      filters = mempty
     }
   where
     exps = mapToNamespace do
@@ -23,6 +22,3 @@ defaultState =
       "expanded.html" ## \(node :: HtmlNode) -> do
         t <- parseT <$> lookupAttr' "text" node
         liftNodes $ toHtmlNodes $ X.elementNodes $ X.documentRoot t
-    filts = mapToFilters do
-      "attrSub" $* attrSub '$' ('{', '}')
-      "tryAttr" $# tryAttrFilter

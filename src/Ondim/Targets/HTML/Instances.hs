@@ -12,7 +12,13 @@ import Lucid qualified as T
 import Lucid.Base qualified as L
 import Lucid.Html5 qualified as L
 import Ondim
+import Ondim.Extra.Substitution (SAttr, SAttrs, SText, SubstConfig (..), getSAttributes)
 import Text.XML qualified as X
+
+type HSConfig = 'SubstConfig '$' '{' '}'
+type HtmlText = SText HSConfig
+type HtmlAttr = SAttr HSConfig
+type HtmlAttrs = SAttrs HSConfig
 
 newtype HtmlDocument = HtmlDocument {documentRoot :: HtmlElement}
   deriving (Eq, Ord, Show, Generic)
@@ -27,10 +33,7 @@ instance L.ToHtml HtmlDocument where
 
 instance OndimNode HtmlDocument where
   type ExpTypes HtmlDocument = 'SpecList '[ToSpec (Nesting HtmlElement)]
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @HtmlNode = Just $ elementChildren . documentRoot
-    | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
-    | otherwise = Nothing
+  renderNode = Just $ L.renderBS . L.toHtml
 
 {- | We use a new XML datatype so that we can group the node with the newline space
   before it. This makes the output formatting much better.
@@ -68,10 +71,8 @@ instance L.ToHtml HtmlElement where
   toHtmlRaw = mempty
 
 instance OndimNode HtmlElement where
-  type ExpTypes HtmlElement = 'SpecList '[ToSpec Attribute, ToSpec HtmlNode]
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
-    | otherwise = Nothing
+  type ExpTypes HtmlElement = 'SpecList '[ToSpec HtmlAttrs, ToSpec (NL HtmlNode)]
+  renderNode = Just $ L.renderBS . L.toHtml
 
 data HtmlNode
   = Element HtmlElement
@@ -104,23 +105,27 @@ toHtmlNodes = foldr go [] . filter notEmpty
       | T.all isSpace t, T.any ('\n' ==) t = Element el {preNewline = True} : xs
     go (X.NodeContent t) (TextNode t' : xs) = TextNode (t <> t') : xs
     go (X.NodeContent t) l = TextNode t : l
-    go (X.NodeElement el) xs  = Element (toHtmlElement el) : xs
+    go (X.NodeElement el) xs = Element (toHtmlElement el) : xs
     go X.NodeComment {} xs = xs
     go X.NodeInstruction {} xs = xs
 
 instance OndimNode HtmlNode where
-  type ExpTypes HtmlNode = 'SpecList '[ToSpec (Nesting HtmlElement), ToSpec (OneSub Text)]
+  type
+    ExpTypes HtmlNode =
+      'SpecList
+        '[ ToSpec (Nesting HtmlElement),
+           ToSpecSel ('ConsSel "TextNode") HtmlText
+         ]
   identify (Element (HtmlElement _ name _ _)) = T.stripPrefix "e:" name
   identify _ = Nothing
   children = specChildren
-  attributes = specAttributes
+  attributes = getSAttributes @HSConfig
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . TextNode
+    | Just Refl <- eqT @t @HtmlDocument = Just $ elementChildren . documentRoot
     | otherwise = Nothing
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Text = Just $ one . toStrict . L.renderText . L.toHtml
-    | Just Refl <- eqT @t @Rendered = Just $ one . L.renderBS . L.toHtml
-    | otherwise = Nothing
+  nodeAsText = Just $ toStrict . L.renderText . L.toHtml
+  renderNode = Just $ L.renderBS . L.toHtml
 
 rawNode :: Text -> HtmlNode
 rawNode = RawNode

@@ -10,13 +10,13 @@ import Ondim.MultiWalk.Class
 -- * Class
 
 class Substructure (target :: Type) (needle :: Type) where
-  getSubs :: Carrier needle -> [target]
+  getSub :: Carrier needle -> [target]
 
+{- | This overlappable instance is necessary because the HasSub machinery tries to
+   match the target with all the fields, including non-matching fields.
+-}
 instance {-# OVERLAPPABLE #-} Substructure target needle where
-  getSubs = mempty
-
-instance (Carrier a ~ [a]) => Substructure a a where
-  getSubs = id
+  getSub = mempty
 
 -- * Structure functions
 
@@ -27,7 +27,7 @@ getSubstructure' ::
   ) =>
   t ->
   [a]
-getSubstructure' = HS.getSub @OCTag @GSubTag @ls @t (Proxy @(Substructure a)) (\(_ :: Proxy j) -> getSubs @a @j)
+getSubstructure' = HS.getSub @OCTag @GSubTag @ls @t (Proxy @(Substructure a)) (\(_ :: Proxy j) -> getSub @a @j)
 
 getSubstructure ::
   forall a t.

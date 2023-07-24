@@ -82,7 +82,7 @@ type GlobalExpansion m = forall a. GlobalConstraints m a => Expansion m a
 data SomeExpansion m where
   SomeExpansion :: TypeRep a -> DefinitionSite -> Expansion m a -> SomeExpansion m
   GlobalExpansion :: DefinitionSite -> GlobalExpansion m -> SomeExpansion m
-  Template :: OndimNode a => DefinitionSite -> a -> SomeExpansion m
+  Template :: (OndimNode a, Typeable a) => DefinitionSite -> a -> SomeExpansion m
   NamespaceData :: Namespace m -> SomeExpansion m
 
 instance Semigroup (Namespace m) where

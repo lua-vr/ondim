@@ -39,8 +39,8 @@ instance OndimNode Node where
   type
     ExpTypes Node =
       'SpecList
-        '[ ToSpec (Trav [] Node),
-           ToSpec Node
+        '[ ToSpec (Trav [] (NL Node)),
+           ToSpec (NL Node)
          ]
   children = specChildren
   attributes (Command _ pairs _) =
@@ -56,7 +56,5 @@ instance OndimNode Node where
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . Text
     | otherwise = Nothing
-  castTo (_ :: Proxy t)
-    | Just Refl <- eqT @t @Text = Just $ one . renderLaTeX . one
-    | Just Refl <- eqT @t @Rendered = Just $ one . encodeUtf8 . renderLaTeX . one
-    | otherwise = Nothing
+  nodeAsText = Just $ renderLaTeX . one
+  renderNode = (encodeUtf8 .) <$> nodeAsText
