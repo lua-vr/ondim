@@ -59,7 +59,7 @@ instance OndimNode MetaValue where
   identify _ = Nothing
   children (MetaMap o)
     | Just (MetaList a) <- Map.lookup "$args" o = a
-  children _ = []
+  children _ = mempty
   attributes (MetaMap o) = liftSub @PAttrs $ Map.foldrWithKey go [] o
     where
       go k (MetaString t) a = (k, t) : a
@@ -149,7 +149,7 @@ instance OndimNode Block where
   identify (Div (_, n, _) _) = getId n
   identify (Header _ (_, n, _) _) = getId n
   identify _ = Nothing
-  children = specChildren
+  children = getSubstructure
   attributes = getSAttributes @PSConfig
   nodeAsText = Just $ stringify @Block
   castFrom (_ :: Proxy t)
@@ -191,7 +191,7 @@ instance OndimNode Inline where
          ]
   identify (Span (_, n, _) _) = getId n
   identify _ = Nothing
-  children = specChildren
+  children = getSubstructure
   attributes = getSAttributes @PSConfig
   nodeAsText = Just $ stringify @Inline
   castFrom (_ :: Proxy t)

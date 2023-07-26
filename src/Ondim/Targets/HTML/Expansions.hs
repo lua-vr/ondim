@@ -10,8 +10,7 @@ import Text.XML qualified as X
 defaultState :: Monad m => OndimState m
 defaultState =
   OndimState
-    { expansions = exps,
-      filters = mempty
+    { expansions = exps
     }
   where
     exps = mapToNamespace do
@@ -21,4 +20,4 @@ defaultState =
         return [rawNode t]
       "expanded.html" ## \(node :: HtmlNode) -> do
         t <- parseT <$> lookupAttr' "text" node
-        liftNodes $ toHtmlNodes $ X.elementNodes $ X.documentRoot t
+        liftSub @(NL HtmlNode) $ toHtmlNodes $ X.elementNodes $ X.documentRoot t

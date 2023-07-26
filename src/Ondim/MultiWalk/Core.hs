@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Ondim.MultiWalk.Core where
@@ -9,18 +10,14 @@ import Data.Bitraversable (bimapM)
 import Data.HashMap.Strict qualified as HMap
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class
-import {-# SOURCE #-} Ondim.MultiWalk.Combinators ()
 import Ondim.MultiWalk.State
 import Type.Reflection (SomeTypeRep (..), eqTypeRep, someTypeRep, typeRep, (:~~:) (..))
 import Prelude hiding (All)
 
--- * CanLift class
-
-class CanLift (s :: Type) where
-  liftSub ::
-    Monad m =>
-    Carrier s ->
-    Ondim m (Carrier s)
+type GlobalConstraints m t =
+  ( OndimNode t,
+    Monad m
+  )
 
 -- Get stuff from state
 
@@ -64,7 +61,7 @@ fromSomeExpansion callSite someExp =
     (SomeExpansion t site v)
       | Just HRefl <- t `eqTypeRep` typeRep @a -> Right (v, site)
       | otherwise -> Left $ ExpansionWrongType (SomeTypeRep t)
-    (Template site v) -> do
+    (Template _ site v) -> do
       thing <- fromTemplate site v
       return (templateToExpansion thing, site)
     NamespaceData {} -> Left $ ExpansionWrongType (someTypeRep (Proxy @Namespace))
@@ -83,11 +80,11 @@ getText' :: forall m. Monad m => [Text] -> Ondim m (Either OndimFailure Text)
 getText' name = do
   mbValue <- Ondim $ gets (lookupExpansion' name . expansions)
   case mbValue of
-    Just (Template site (thing :: a))
-      | Just HRefl <- typeRep @Text `eqTypeRep` typeRep @a -> return $ Right thing
+    Just (Template trep site thing)
+      | Just HRefl <- typeRep @Text `eqTypeRep` trep -> return $ Right thing
       | Just cast <- nodeAsText -> Right . cast <$> withSite site (liftSubstructures thing)
-      | otherwise -> return $ Left $ TemplateWrongType (SomeTypeRep $ typeRep @a)
-     -- bimapM return id $ fromTemplate site thing
+      | otherwise -> return $ Left $ TemplateWrongType (SomeTypeRep trep)
+    -- bimapM return id $ fromTemplate site thing
     Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
     Nothing -> return $ Left NotBound
 
@@ -98,16 +95,13 @@ getTemplate' :: forall m a. GlobalConstraints m a => [Text] -> Ondim m (Either O
 getTemplate' name = do
   mbValue <- Ondim $ gets (lookupExpansion' name . expansions)
   case mbValue of
-    Just (Template site thing) ->
+    Just (Template _ site thing) ->
       bimapM return id $ fromTemplate site thing
     Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
     Nothing -> return $ Left NotBound
 
 getTemplate :: GlobalConstraints m a => Text -> Ondim m (Either OndimFailure [a])
 getTemplate = getTemplate' . splitExpansionKey
-
-getTemplateFold :: (Monoid a, GlobalConstraints m a) => Text -> Ondim m (Either OndimFailure a)
-getTemplateFold name = second mconcat <$> getTemplate name
 
 getNamespace ::
   Monad m =>
@@ -153,52 +147,26 @@ expCtx name site (Ondim ctx) = do
           )
           ctx
 
-getSomeFilter :: forall a m. GlobalConstraints m a => SomeFilter m -> Maybe (Filter m a)
-getSomeFilter x
-  | SomeFilter t v <- x,
-    Just HRefl <- t `eqTypeRep` rep =
-      Just v
-  | otherwise = Nothing
-  where
-    rep = typeRep @a
-
-getSomeMapFilter :: forall a m. GlobalConstraints m a => SomeFilter m -> Maybe (MapFilter m a)
-getSomeMapFilter x
-  | SomeMapFilter t v <- x,
-    Just HRefl <- t `eqTypeRep` rep =
-      Just v
-  | otherwise = Nothing
-  where
-    rep = typeRep @a
-
 -- * Lifiting
 
 {- | This function recursively lifts the nodes into an unvaluated state, that will
    be evaluated with the defined expansions.
 -}
 liftNode ::
-  forall m t.
+  forall t m.
   GlobalConstraints m t =>
   t ->
   Ondim m [t]
 liftNode node = do
   inhibit <- Ondim $ asks inhibitErrors
-  apFilters <-
-    Ondim $
-      gets $
-        foldr (\f g -> f node . g) id
-          . mapMaybe (getSomeFilter @t)
-          . toList
-          . filters
-  apFilters $
-    case identify node of
-      Just name ->
-        getExpansion name >>= \case
-          Right expansion -> expansion node
-          Left e
-            | inhibit -> continue
-            | otherwise -> throwExpFailure @t name e
-      _ -> continue
+  case identify node of
+    Just name ->
+      getExpansion name >>= \case
+        Right expansion -> expansion node
+        Left e
+          | inhibit -> continue
+          | otherwise -> throwExpFailure @t name e
+    _ -> continue
   where
     continue = one <$> liftSubstructures node
 {-# INLINEABLE liftNode #-}
@@ -206,18 +174,10 @@ liftNode node = do
 -- | Lift a list of nodes, applying filters.
 liftNodes ::
   forall m t.
-  GlobalConstraints m t =>
+  (OndimNode t, Monad m) =>
   [t] ->
   Ondim m [t]
-liftNodes nodes = do
-  apFilters <-
-    Ondim $
-      gets $
-        foldr (.) id
-          . mapMaybe (getSomeMapFilter @t)
-          . toList
-          . filters
-  apFilters $ foldMapM liftNode nodes
+liftNodes = liftSub @(NodeListSpec t)
 {-# INLINEABLE liftNodes #-}
 
 -- | Lift only the substructures of a node.

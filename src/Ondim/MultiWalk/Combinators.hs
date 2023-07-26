@@ -1,5 +1,4 @@
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ondim.MultiWalk.Combinators
   ( -- ** Spec
@@ -8,6 +7,7 @@ module Ondim.MultiWalk.Combinators
     Spec (..),
     SubSpec (..),
     SelSpec (..),
+    Carrier,
 
     -- ** Combinators
     NL,
@@ -26,50 +26,54 @@ module Ondim.MultiWalk.Combinators
     CanLift (..),
     Substructure (..),
     AllMods,
+    NLDef,
   )
 where
 
 import Control.MultiWalk.HasSub (AllMods, GSubTag, SelSpec, Spec (..), SubSpec (..))
 import Control.MultiWalk.HasSub qualified as HS
 import Ondim.MultiWalk.Basic
-import Ondim.MultiWalk.Class (OndimNode (..))
+import Ondim.MultiWalk.Class (OndimNode (..), CanLift (..), Substructure (..))
 import Ondim.MultiWalk.Core
 import Ondim.MultiWalk.Substructure
 import Type.Errors qualified as TE
 
-type family CombinatorCarrier (b :: Type) :: Type where
-  CombinatorCarrier (NodeList a) = [a]
-  CombinatorCarrier (Nesting b) = b
-  CombinatorCarrier (MatchWith s _) = s
-  CombinatorCarrier (OneSub a) = a
-  CombinatorCarrier (Trav f a) = f (Carrier a)
-  CombinatorCarrier (Converting b _) = b
-  CombinatorCarrier (Sequence a _) = Carrier a
-  CombinatorCarrier (Custom b tag) = b
-  CombinatorCarrier (ModSub b _) = b
-  CombinatorCarrier a = TE.TypeError ('TE.Text "The type " 'TE.:<>: TE.ShowTypeQuoted a 'TE.:<>: 'TE.Text " is not a valid combinator.")
+type family Carrier (b :: Type) :: Type where
+  Carrier (NodeList a) = [a]
+  Carrier (NLDef a) = [a]
+  Carrier (Nesting b) = b
+  Carrier (MatchWith s _) = s
+  Carrier (OneSub a) = a
+  Carrier (Trav f a) = f (Carrier a)
+  Carrier (Converting b _) = b
+  Carrier (Sequence a _) = Carrier a
+  Carrier (Custom b tag) = b
+  Carrier (ModSub b _) = b
+  Carrier a = TE.TypeError ('TE.Text "The type " 'TE.:<>: TE.ShowTypeQuoted a 'TE.:<>: 'TE.Text " is not a valid combinator.")
 
-type instance HS.Carrier OCTag a = CombinatorCarrier a
+type instance HS.Carrier OCTag a = Carrier a
 
 -- Definitions
+
+data NLDef (a :: Type)
+
+instance OndimNode a => CanLift (NLDef a) where
+  liftSub = foldMapM liftNode
+
+instance OndimNode a => Substructure a (NLDef a) where
+  getSub = id
 
 -- | Shorthand for 'NodeList'
 type NL = NodeList
 
 -- | @'NodeList' a@ matches @[a]@ where @a@ is a 'OndimNode'
-data NodeList a
+data NodeList (a :: Type)
 
-instance (OndimNode a) => CanLift (NodeList a) where
+instance OndimNode a => CanLift (NodeList a) where
   liftSub = liftNodes
 
-instance Substructure a (NodeList a) where
+instance OndimNode a => Substructure a (NodeList a) where
   getSub = id
-
-instance (OndimNode a) => OndimNode [a] where
-  type ExpTypes [a] = 'SpecSelf (NodeList a)
-  castFrom p = (one .) <$> castFrom p
-  renderNode = foldMap' <$> renderNode
-  nodeAsText = foldMap' <$> nodeAsText
 
 -- | @'MatchWith' s a@ matches a type @s@ that is coercible to the 'Carrier' of @a@
 data MatchWith (s :: Type) (a :: Type)
@@ -150,7 +154,7 @@ instance
   where
   getSub = getSubstructure
 
-data Converting a b
+data Converting (a :: Type) (b :: Type)
 
 class Conversible a b where
   convertTo :: a -> b
@@ -172,7 +176,7 @@ instance
   where
   getSub = getSub @k @a . convertTo
 
-data Sequence a b
+data Sequence (a :: Type) (b :: Type)
 
 instance
   ( Carrier a ~ Carrier b,
@@ -192,9 +196,12 @@ instance
   where
   getSub x = getSub @k @a x <> getSub @k @b x
 
-data Custom b tag
+data Custom (b :: Type) (tag :: Type)
 
-data ModSub needle (spec :: [SubSpec])
+instance OndimNode t => Substructure t (Custom [t] tag) where
+  getSub = id
+
+data ModSub (needle :: Type) (spec :: [SubSpec])
 
 instance
   ( AllMods CanLift ('SpecList spec),

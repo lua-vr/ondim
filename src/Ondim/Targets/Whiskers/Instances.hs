@@ -4,6 +4,7 @@ module Ondim.Targets.Whiskers.Instances where
 
 import Data.Typeable (eqT, (:~:) (..))
 import Ondim
+import Ondim.Extra.Substitution (SubstConfig (..), getSAttributes)
 
 data Node
   = Section Text [Attribute] [Node]
@@ -25,8 +26,8 @@ instance OndimNode Node where
       'SpecList
         '[ ToSpec (NL Node)
          ]
-  children = specChildren
-  attributes = return . getSubstructure
+  children = getSubstructure
+  attributes = getSAttributes @('SubstConfig '$' '{' '}')
   identify = \case
     Section t _ _ -> Just t
     Single t _ -> Just t

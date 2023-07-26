@@ -100,7 +100,7 @@ mapExp vf obj = assocsExp vf (Map.toList obj)
 
 ifElse ::
   forall t m.
-  GlobalConstraints m t =>
+  (OndimNode t, Monad m) =>
   Bool ->
   Expansion m t
 ifElse cond node = do

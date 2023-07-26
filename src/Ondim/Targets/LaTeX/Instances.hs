@@ -42,7 +42,8 @@ instance OndimNode Node where
         '[ ToSpec (Trav [] (NL Node)),
            ToSpec (NL Node)
          ]
-  children = specChildren
+  type NodeListSpec Node = NodeWithSep
+  children = getSubstructure
   attributes (Command _ pairs _) =
     forM pairs \(k, v) ->
       liftM2
@@ -58,3 +59,16 @@ instance OndimNode Node where
     | otherwise = Nothing
   nodeAsText = Just $ renderLaTeX . one
   renderNode = (encodeUtf8 .) <$> nodeAsText
+
+type NodeWithSep = Custom [Node] Void
+
+instance CanLift NodeWithSep where
+  liftSub = foldr go (pure [])
+    where
+      go i@(Command "sep" _ _) x = (i :) <$> x
+      go i x = liftA2 (++?) (liftNode i) x
+
+      xs ++? ys = foldr cons ys xs
+
+      cons (Command "sep" _ _) (Command "sep" _ _ : xs) = Text "\n\n" : xs
+      cons x xs = x : xs

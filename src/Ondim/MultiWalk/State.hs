@@ -10,9 +10,6 @@ module Ondim.MultiWalk.State
     putSomeExpansion,
     withoutExpansions,
     withNamespace,
-    withFilter,
-    withFilters,
-    withoutFilters,
 
     -- * Expansion and Filter maps
     (#<>),
@@ -38,16 +35,6 @@ module Ondim.MultiWalk.State
     namespace,
     namespace',
     (#.),
-    -- Filter map
-    FilterMap,
-    mapToFilters,
-    bindingFilters,
-    -- Filter constructors
-    ($:),
-    someFilter,
-    ($#),
-    mapFilter,
-    ($*),
 
     -- * Altering namespaces
     splitExpansionKey,
@@ -63,7 +50,6 @@ where
 import Control.Monad.Writer.CPS
 import Data.Char (isLetter)
 import Data.HashMap.Strict qualified as HMap
-import Data.Map qualified as Map
 import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class (OndimNode)
@@ -95,35 +81,14 @@ withSomeExpansion name ex st = do
   where
     insOrDel = maybe (deleteExpansion name) (insertExpansion name)
 
-withFilter ::
-  Monad m =>
-  Text ->
-  Maybe (SomeFilter m) ->
-  Ondim m a ->
-  Ondim m a
-withFilter name ex st = do
-  pEx <- Ondim $ gets (Map.lookup name . filters)
-  Ondim $ modify' \s -> s {filters = insOrDel ex (filters s)}
-  st <* modifyOndimS \s -> s {filters = insOrDel pEx (filters s)}
-  where
-    insOrDel x = Map.alter (const x) name
-
 -- | "Bind" new namespace locally.
 withNamespace :: Monad m => Namespace m -> Ondim m a -> Ondim m a
 withNamespace (Namespace exps) o =
   foldr (\(k, v) -> withSomeExpansion k (Just v)) o (HMap.toList exps)
 
--- | "Bind" filters locally.
-withFilters :: Monad m => Filters m -> Ondim m a -> Ondim m a
-withFilters filt o = foldr (\(k, v) -> withFilter k (Just v)) o (Map.toList filt)
-
 -- | "Unbind" many expansions locally.
 withoutExpansions :: Monad m => [Text] -> Ondim m a -> Ondim m a
 withoutExpansions names o = foldr (`withSomeExpansion` Nothing) o names
-
--- | "Unbind" many expansions locally.
-withoutFilters :: Monad m => [Text] -> Ondim m a -> Ondim m a
-withoutFilters names o = foldr (`withFilter` Nothing) o names
 
 -- | Put a new expansion into the local state, modifying the scope.
 putSomeExpansion :: Monad m => Text -> SomeExpansion m -> Ondim m ()
@@ -161,10 +126,10 @@ infixr 0 ##
 name ## ex = name #: someExpansion ex
 
 templateData :: forall a m. (HasCallStack, OndimNode a) => a -> SomeExpansion m
-templateData = Template callStackSite
+templateData = Template typeRep callStackSite
 
 templateData' :: forall a m. (HasCallStack, OndimNode a) => DefinitionSite -> a -> SomeExpansion m
-templateData' = Template
+templateData' = Template typeRep
 
 infixr 0 #%
 
@@ -210,37 +175,6 @@ infixr 0 #.
 (#.) :: Text -> ExpansionMap m -> ExpansionMap m
 name #. ex = name #: namespace ex
 
--- Filters
-
-type FilterMap m = Writer [(Text, Maybe (SomeFilter m))] ()
-
-infixr 0 $:
-
-($:) :: Text -> SomeFilter m -> FilterMap m
-name $: ex = name #<> Just ex
-
-someFilter :: Typeable t => Filter m t -> SomeFilter m
-someFilter = SomeFilter typeRep
-
-infixr 0 $#
-
-($#) :: Typeable t => Text -> Filter m t -> FilterMap m
-name $# ex = name $: someFilter ex
-
-mapFilter :: Typeable t => MapFilter m t -> SomeFilter m
-mapFilter = SomeMapFilter typeRep
-
-infixr 0 $*
-
-($*) :: Typeable t => Text -> MapFilter m t -> FilterMap m
-name $* ex = name $: mapFilter ex
-
-mapToFilters :: FilterMap m -> Filters m
-mapToFilters ex = foldl' go mempty exps
-  where
-    go = flip $ uncurry Map.insert
-    exps = mapMaybe sequence $ execWriter ex
-
 -- | Infix version of @withExpansions@ to bind using MapSyntax.
 binding ::
   Monad m =>
@@ -250,16 +184,6 @@ binding ::
 binding o exps =
   let kvs = execWriter exps
    in foldl' (flip $ uncurry withSomeExpansion) o kvs
-
--- | Infix version of @withFilters@ to bind using MapSyntax.
-bindingFilters ::
-  Monad m =>
-  Ondim m a ->
-  FilterMap m ->
-  Ondim m a
-bindingFilters o filts =
-  let kvs = execWriter filts
-   in foldl' (flip $ uncurry withFilter) o kvs
 
 splitExpansionKey :: Text -> [Text]
 splitExpansionKey = T.split (\c -> c /= '-' && not (isLetter c))

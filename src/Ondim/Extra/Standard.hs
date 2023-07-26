@@ -35,7 +35,7 @@ standardMap = do
 
 -- * Control flow
 
-ifBound :: forall t m. GlobalConstraints m t => Expansion m t
+ifBound :: forall t m. (OndimNode t, Monad m) => Expansion m t
 ifBound node = do
   attrs <- T.split (== ',') <$> getSingleAttr' "id" node
   bound <- allM exists attrs
@@ -54,7 +54,7 @@ anyBound node = do
 matchBound :: GlobalExpansion m
 matchBound node = do
   tag <- getSingleAttr' "id" node
-  tagC <- getTemplateFold tag
+  tagC <- getText tag
   switchWithDefault (rightToMaybe tagC) node
 
 ignore :: forall t m. Monad m => Expansion m t

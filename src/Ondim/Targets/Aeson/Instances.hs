@@ -46,8 +46,8 @@ instance OndimNode Value where
     | Just (String name) <- KM.lookup "$" o = Just name
   identify _ = Nothing
   children (Object o)
-    | Just (Array a) <- KM.lookup "$args" o = toList a
-  children _ = []
+    | Just (Array (toList -> a)) <- KM.lookup "$args" o = a
+  children _ = mempty
   attributes (Object o) = liftSub @AesonAttrs $ KM.foldrWithKey go [] o
     where
       go k (String t) a = (K.toText k, t) : a

@@ -8,8 +8,7 @@ import Ondim.Targets.LaTeX.Instances (Node (..), escapeLaTeX)
 defaultState :: Monad m => OndimState m
 defaultState =
   OndimState
-    { expansions = exps,
-      filters = filts
+    { expansions = exps
     }
   where
     exps = mapToNamespace do
@@ -17,8 +16,3 @@ defaultState =
         t <- lookupAttr' "text" node
         return [Text $ escapeLaTeX t]
       standardMap
-      "sep.tex" #* pure . one
-    filts = mapToFilters do
-      "sep.tex" $* fmap (foldr go [])
-    go (Command "sep" _ _) (Command "sep" _ _ : xs) = Text "\n\n" : xs
-    go x xs = x : xs

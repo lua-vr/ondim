@@ -13,6 +13,7 @@ import Data.Text qualified as T
 import GHC.Exception (SrcLoc)
 import GHC.Exts qualified as GHC
 import {-# SOURCE #-} Ondim.MultiWalk.Class
+import {-# SOURCE #-} Ondim.MultiWalk.Combinators (Carrier)
 import System.FilePath (takeExtensions)
 import Type.Reflection (SomeTypeRep, TypeRep, someTypeRep)
 
@@ -45,8 +46,6 @@ instance MonadError e m => MonadError e (Ondim m) where
 
 -- * Filters and Expansions
 
-type GlobalConstraints m t = (OndimNode t, Typeable t, Monad m)
-
 data DefinitionSite
   = CodeDefinition SrcLoc
   | FileDefinition {definitionPath :: FilePath, definitionExt :: Text}
@@ -63,26 +62,16 @@ callStackSite = case GHC.toList callStack of
   x : _ -> CodeDefinition (snd x)
   [] -> NoDefinition
 
--- Filters
-
-type Filter m t = t -> Ondim m [t] -> Ondim m [t]
-type MapFilter m t = Ondim m [t] -> Ondim m [t]
-type Filters m = Map Text (SomeFilter m)
-
-data SomeFilter m where
-  SomeFilter :: TypeRep a -> Filter m a -> SomeFilter m
-  SomeMapFilter :: TypeRep a -> MapFilter m a -> SomeFilter m
-
 -- Expansions
 
 type Expansion m t = t -> Ondim m [t]
 newtype Namespace m = Namespace {getExpansions :: HashMap Text (SomeExpansion m)}
-type GlobalExpansion m = forall a. GlobalConstraints m a => Expansion m a
+type GlobalExpansion m = forall a. (OndimNode a, Monad m) => Expansion m a
 
 data SomeExpansion m where
   SomeExpansion :: TypeRep a -> DefinitionSite -> Expansion m a -> SomeExpansion m
   GlobalExpansion :: DefinitionSite -> GlobalExpansion m -> SomeExpansion m
-  Template :: (OndimNode a, Typeable a) => DefinitionSite -> a -> SomeExpansion m
+  Template :: (OndimNode a) => TypeRep a -> DefinitionSite -> a -> SomeExpansion m
   NamespaceData :: Namespace m -> SomeExpansion m
 
 instance Semigroup (Namespace m) where
@@ -101,21 +90,12 @@ type Conversions = forall a b. TypeRep a -> TypeRep b -> a -> b
 -- * State data
 
 -- | Ondim's expansion state
-data OndimState (m :: Type -> Type) = OndimState
+newtype OndimState (m :: Type -> Type) = OndimState
   { -- | Named expansions
-    expansions :: Namespace m,
-    -- | Similar to expansions, but are always applied after the expansion. The
-    -- purpose of the name is just to facilitate binding/unbinding and control
-    -- execution order, it respects lexicographic order on keys.
-    filters :: Filters m
+    expansions :: Namespace m
   }
   deriving (Generic)
-
-instance Monoid (OndimState m) where
-  mempty = OndimState mempty mempty
-
-instance Semigroup (OndimState m) where
-  OndimState x1 y1 <> OndimState x2 y2 = OndimState (x1 <> x2) (y1 <> y2)
+  deriving newtype (Semigroup, Monoid)
 
 -- * Exceptions
 
@@ -225,9 +205,9 @@ throwExpFailure t f =
 data OCTag
 
 type HasSub tag ls t = HS.HasSub OCTag tag ls t
-type Carrier a = HS.Carrier OCTag a
 type ToSpec a = HS.ToSpec OCTag a
 type ToSpecSel s a = HS.ToSpecSel OCTag s a
+type instance HS.Carrier OCTag a = Carrier a
 
 -- * Attributes
 

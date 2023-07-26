@@ -48,7 +48,7 @@ instance (KnownConfig c) => CanLift (SText c) where
               Just (_, rest4) <- T.uncons rest3 -> do
                 res <- callText name
                 (res <>) <$> go rest4
-            | otherwise -> T.cons '$' <$> go rest1
+            | otherwise -> T.cons s <$> go rest1
           _noStartChar -> return mempty
 
 newtype SAttrData (c :: SubstConfig) = SAttrData {unSAttrData :: (Text, Text)}
@@ -68,6 +68,7 @@ instance (KnownConfig c) => OndimNode (SAttrData c) where
         '[ ToSpec
             (ModSub (Text, Text) '[ToSpec (SText c)])
          ]
+  type NodeListSpec (SAttrData c) = LiftSAttrsWithTry' c
   identify (SAttrData (name, _)) = T.stripPrefix "e:" name
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @(Text, Text) = Just $ one . coerce
@@ -79,6 +80,17 @@ instance Conversible [(Text, Text)] [SAttrData c] where
 
 -- Could've used MatchWith here, but it would throw errors because users cannot import the constructor.
 type SAttrs (c :: SubstConfig) = Converting [(Text, Text)] (NL (SAttrData c))
+
+type LiftSAttrsWithTry' (c :: SubstConfig) = Custom [SAttrData c] (SubstLift c)
+
+instance KnownConfig c => CanLift (LiftSAttrsWithTry' c) where
+  liftSub = foldMapM go
+    where
+      go x@(coerce -> (k, v :: Text))
+        | Just (k', '?') <- T.unsnoc k =
+            liftNode @(SAttrData c) (coerce (k', v))
+              `catchFailure` \_ _ _ _ -> return []
+        | otherwise = liftNode x
 
 getSAttributes ::
   forall c m t.

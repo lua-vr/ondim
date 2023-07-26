@@ -6,8 +6,7 @@ import Ondim.Extra.Standard (standardMap)
 defaultState :: Monad m => OndimState m
 defaultState =
   OndimState
-    { expansions = exps,
-      filters = mempty
+    { expansions = exps
     }
   where
     exps = mapToNamespace standardMap

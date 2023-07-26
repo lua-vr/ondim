@@ -1,3 +1,5 @@
 module Ondim.MultiWalk.Class where
 
-class OndimNode t
+class CanLift (s :: Type)
+
+class OndimNode (t :: Type)

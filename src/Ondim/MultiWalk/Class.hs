@@ -1,24 +1,55 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 
-module Ondim.MultiWalk.Class (OndimNode (..), ondimCast) where
+module Ondim.MultiWalk.Class
+  ( OndimNode (..),
+    CanLift (..),
+    Substructure (..),
+    ondimCast,
+  ) where
 
 import Control.MultiWalk.HasSub (AllMods, GSubTag, Spec (..))
 import Data.Typeable (eqT, (:~:) (..))
 import Ondim.MultiWalk.Basic
-import {-# SOURCE #-} Ondim.MultiWalk.Core
+import {-# SOURCE #-} Ondim.MultiWalk.Combinators
 
 -- * Class
+
+-- * CanLift class
+
+class CanLift (s :: Type) where
+  liftSub ::
+    Monad m =>
+    Carrier s ->
+    Ondim m (Carrier s)
+
+-- * Substructure class
+
+class Substructure (target :: Type) (needle :: Type) where
+  getSub :: Carrier needle -> [target]
+
+{- | This overlappable instance is necessary because the HasSub machinery tries to
+   match the target with all the fields, including non-matching fields.
+-}
+instance {-# OVERLAPPABLE #-} Substructure target needle where
+  getSub = mempty
+
+-- * OndimNode class
 
 class
   ( HasSub GSubTag (ExpTypes t) t,
     AllMods CanLift (ExpTypes t),
-    OndimCast t,
-    Typeable t
+    CanLift (NodeListSpec t),
+    Carrier (NodeListSpec t) ~ [t],
+    OndimCast t
   ) =>
   OndimNode t
   where
   type ExpTypes t :: Spec
+  type NodeListSpec t :: Type
+  type NodeListSpec t = NLDef t
   identify :: t -> Maybe Text
   identify _ = Nothing
   attributes :: Monad m => t -> Ondim m [Attribute]
@@ -31,6 +62,13 @@ class
   renderNode = Nothing
   nodeAsText :: Maybe (t -> Text)
   nodeAsText = Nothing
+
+instance OndimNode a => OndimNode [a] where
+  type ExpTypes [a] = 'SpecSelf (NodeList a)
+  type NodeListSpec [a] = Trav [] (NodeList a)
+  castFrom p = (one .) <$> castFrom p
+  renderNode = foldMap' <$> renderNode
+  nodeAsText = foldMap' <$> nodeAsText
 
 -- Some data instances (won't lift)
 

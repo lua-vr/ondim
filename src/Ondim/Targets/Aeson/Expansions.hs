@@ -6,8 +6,7 @@ import Ondim.Targets.Aeson.Instances ()
 
 defaultState :: Monad m => OndimState m
 defaultState =
-  OndimState { expansions = exps,
-               filters = mempty
+  OndimState { expansions = exps
              }
   where
     exps = mapToNamespace standardMap

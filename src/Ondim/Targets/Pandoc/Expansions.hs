@@ -8,8 +8,7 @@ import Text.Pandoc (Block (..), ListNumberDelim (..), ListNumberStyle (..))
 defaultState :: Monad m => OndimState m
 defaultState =
   OndimState
-    { expansions = exps,
-      filters = mempty
+    { expansions = exps
     }
   where
     exps = mapToNamespace do

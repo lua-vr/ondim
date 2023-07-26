@@ -15,10 +15,6 @@ module Ondim
     GlobalExpansion,
     SomeExpansion,
     Namespace,
-    Filter,
-    MapFilter,
-    SomeFilter,
-    Filters,
     OndimState (..),
 
     -- * Monad
@@ -52,10 +48,7 @@ module Ondim
     -- Get parts of the state
     getExpansion,
     getTemplate,
-    getTemplateFold,
     getNamespace,
-    getSomeMapFilter,
-    getSomeFilter,
     getTemplate',
     getText,
     getText',
@@ -73,7 +66,6 @@ module Ondim
     -- * Structure
     getSubstructure,
     liftChildren,
-    specChildren,
     lookupAttr,
 
     -- * Auxiliary
@@ -130,13 +122,6 @@ renderNodeOrError =
   case renderNode of
     Just render -> return . render
     Nothing -> const $ throwTemplateError "This type cannot be rendered."
-
--- | You can use this as a default instance for the 'children' class method.
-specChildren ::
-  (OndimNode t, AllMods (Substructure t) (ExpTypes t)) =>
-  t ->
-  [t]
-specChildren = getSubstructure
 
 -- Attributes
 

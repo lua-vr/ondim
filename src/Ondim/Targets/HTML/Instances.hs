@@ -12,7 +12,7 @@ import Lucid qualified as T
 import Lucid.Base qualified as L
 import Lucid.Html5 qualified as L
 import Ondim
-import Ondim.Extra.Substitution (SAttr, SAttrs, SText, SubstConfig (..), getSAttributes)
+import Ondim.Extra.Substitution (SAttr, SText, SubstConfig (..), SAttrs, getSAttributes)
 import Text.XML qualified as X
 
 type HSConfig = 'SubstConfig '$' '{' '}'
@@ -118,7 +118,7 @@ instance OndimNode HtmlNode where
          ]
   identify (Element (HtmlElement _ name _ _)) = T.stripPrefix "e:" name
   identify _ = Nothing
-  children = specChildren
+  children = getSubstructure
   attributes = getSAttributes @HSConfig
   castFrom (_ :: Proxy t)
     | Just Refl <- eqT @t @Text = Just $ one . TextNode
