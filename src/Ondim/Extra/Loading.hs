@@ -72,7 +72,7 @@ loadTemplatesDynamic cfgs places =
                       let dir = snd $ minimumOn1 fst (fst <$> ls)
                           fp = dir </> file
                        in readFileLBS fp <&> loadFnToUpdate (cfgMap ! i) fp name
-                    Delete -> pure \s -> s {expansions = deleteExpansion name (expansions s)}
+                    Delete -> pure \s -> s {expansions = deleteExpansion name (expansions s)} <> initial
    in unionMount sources patts exclude initial handler
 
 -- | Load templates from a list of directories in descending order of priority.
