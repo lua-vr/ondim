@@ -25,6 +25,7 @@ module Ondim
 
     -- * Rendering
     renderNodeOrError,
+    renderTemplateOrError,
 
     -- * Exceptions
     TraceData (..),
@@ -117,12 +118,6 @@ liftChildren ::
   Expansion m t
 liftChildren = liftNodes . children
 
-renderNodeOrError :: (HasCallStack, Monad m) => OndimNode a => a -> Ondim m LByteString
-renderNodeOrError =
-  case renderNode of
-    Just render -> return . render
-    Nothing -> const $ throwTemplateError "This type cannot be rendered."
-
 -- Attributes
 
 lookupAttr ::
@@ -131,6 +126,22 @@ lookupAttr ::
   t ->
   Ondim m (Maybe Text)
 lookupAttr key = fmap (L.lookup key) . attributes
+
+renderNodeOrError :: (HasCallStack, Monad m) => OndimNode a => a -> Ondim m LByteString
+renderNodeOrError =
+  case renderNode of
+    Just render -> return . render
+    Nothing -> const $ throwTemplateError "This type cannot be rendered."
+
+renderTemplateOrError :: (HasCallStack, Monad m) => Text -> Ondim m LByteString
+renderTemplateOrError name = do
+  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
+  case mbValue of
+    Just (Template _ site thing) ->
+      renderNodeOrError
+        =<< withSite site (liftSubstructures thing)
+    Just _ -> throwExpFailure @() name (FailureOther "Identifier not bound to a template.")
+    Nothing -> throwExpFailure @() name NotBound
 
 -- | Either applies template 'name', or throws an error if it does not exist.
 callTemplate :: forall t m. GlobalConstraints m t => Text -> Ondim m [t]
