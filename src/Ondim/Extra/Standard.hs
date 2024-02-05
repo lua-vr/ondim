@@ -43,7 +43,7 @@ ifBound node = do
   where
     exists n = isJust . lookupExpansion n . expansions <$> getOndimS
 
-anyBound :: forall t m. GlobalConstraints m t => Expansion m t
+anyBound :: forall t m. (OndimNode t, Monad m) => Expansion m t
 anyBound node = do
   attrs <- fst <<$>> attributes node
   bound <- anyM exists attrs
@@ -93,7 +93,7 @@ with node = do
    >   <animal-entry />
    > <scope/>
 -}
-scope :: forall t m. GlobalConstraints m t => Expansion m t
+scope :: forall t m. (OndimNode t, Monad m) => Expansion m t
 scope node = do
   s <- getOndimS
   liftChildren node <* putOndimS s

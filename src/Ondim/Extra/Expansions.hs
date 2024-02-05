@@ -46,7 +46,7 @@ listExp f list = do
 
 listList ::
   forall a m t.
-  GlobalConstraints m t =>
+  (OndimNode t, Monad m) =>
   (a -> SomeExpansion m) ->
   [a] ->
   Expansion m t
@@ -118,7 +118,7 @@ ifElse cond node = do
 
 switchWithDefault ::
   forall m t.
-  GlobalConstraints m t =>
+  (OndimNode t, Monad m) =>
   Maybe Text ->
   Expansion m t
 switchWithDefault tag node = do
@@ -138,8 +138,9 @@ switchWithDefault tag node = do
 renderExp ::
   forall m a b.
   ( HasCallStack,
-    GlobalConstraints m a,
-    OndimNode b
+    OndimNode a,
+    OndimNode b,
+    Monad m
   ) =>
   (Text -> Either String b) ->
   Expansion m a

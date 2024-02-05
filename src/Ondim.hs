@@ -10,7 +10,6 @@ module Ondim
     module Ondim.MultiWalk.Combinators,
 
     -- * Data types
-    GlobalConstraints,
     Expansion,
     GlobalExpansion,
     SomeExpansion,
@@ -114,7 +113,7 @@ evalOndimT = evalOndimTWith mempty
 
 liftChildren ::
   forall t m.
-  GlobalConstraints m t =>
+  (OndimNode t, Monad m) =>
   Expansion m t
 liftChildren = liftNodes . children
 
@@ -144,7 +143,7 @@ renderTemplateOrError name = do
     Nothing -> throwExpFailure @() name NotBound
 
 -- | Either applies template 'name', or throws an error if it does not exist.
-callTemplate :: forall t m. GlobalConstraints m t => Text -> Ondim m [t]
+callTemplate :: forall t m. (OndimNode t, Monad m) => Text -> Ondim m [t]
 callTemplate name = do
   exps <- getTemplate name
   either (throwExpFailure @t name) return exps
@@ -156,7 +155,7 @@ callText name = do
   either (throwExpFailure @Text name) return exps
 
 -- | Either applies expansion 'name', or throws an error if it does not exist.
-callExpansion :: forall t m. GlobalConstraints m t => Text -> Expansion m t
+callExpansion :: forall t m. (OndimNode t, Monad m) => Text -> Expansion m t
 callExpansion name arg = do
   exps <- getExpansion name
   either (throwExpFailure @t name) ($ arg) exps

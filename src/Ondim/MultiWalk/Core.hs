@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Ondim.MultiWalk.Core where
@@ -13,11 +12,6 @@ import Ondim.MultiWalk.Class
 import Ondim.MultiWalk.State
 import Type.Reflection (SomeTypeRep (..), eqTypeRep, someTypeRep, typeRep, (:~~:) (..))
 import Prelude hiding (All)
-
-type GlobalConstraints m t =
-  ( OndimNode t,
-    Monad m
-  )
 
 -- Get stuff from state
 
@@ -37,7 +31,7 @@ fromTemplate site value
 
 templateToExpansion ::
   forall m t.
-  GlobalConstraints m t =>
+  (OndimNode t, Monad m) =>
   Ondim m [t] ->
   Expansion m t
 templateToExpansion tpl inner = do
@@ -51,7 +45,7 @@ templateToExpansion tpl inner = do
 
 fromSomeExpansion ::
   forall a m.
-  GlobalConstraints m a =>
+  (OndimNode a, Monad m) =>
   DefinitionSite ->
   SomeExpansion m ->
   Either OndimFailure (Expansion m a, DefinitionSite)
@@ -91,7 +85,7 @@ getText' name = do
 getText :: forall m. Monad m => Text -> Ondim m (Either OndimFailure Text)
 getText = getText' . splitExpansionKey
 
-getTemplate' :: forall m a. GlobalConstraints m a => [Text] -> Ondim m (Either OndimFailure [a])
+getTemplate' :: forall m a. (OndimNode a, Monad m) => [Text] -> Ondim m (Either OndimFailure [a])
 getTemplate' name = do
   mbValue <- Ondim $ gets (lookupExpansion' name . expansions)
   case mbValue of
@@ -100,7 +94,7 @@ getTemplate' name = do
     Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
     Nothing -> return $ Left NotBound
 
-getTemplate :: GlobalConstraints m a => Text -> Ondim m (Either OndimFailure [a])
+getTemplate :: (OndimNode a, Monad m) => Text -> Ondim m (Either OndimFailure [a])
 getTemplate = getTemplate' . splitExpansionKey
 
 getNamespace ::
@@ -116,7 +110,7 @@ getNamespace name = do
 
 getExpansion ::
   forall t m.
-  GlobalConstraints m t =>
+  (OndimNode t, Monad m) =>
   Text ->
   Ondim m (Either OndimFailure (Expansion m t))
 getExpansion name = do
@@ -154,7 +148,7 @@ expCtx name site (Ondim ctx) = do
 -}
 liftNode ::
   forall t m.
-  GlobalConstraints m t =>
+  (OndimNode t, Monad m) =>
   t ->
   Ondim m [t]
 liftNode node = do
