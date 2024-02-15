@@ -47,7 +47,6 @@ module Ondim.MultiWalk.State
   )
 where
 
-import Control.Monad.Writer.CPS
 import Data.Char (isLetter)
 import Data.HashMap.Strict qualified as HMap
 import Data.Text qualified as T
@@ -99,15 +98,19 @@ putSomeExpansion key ex =
 
 infixr 0 #<>
 
-(#<>) :: Text -> m -> Writer [(Text, m)] ()
-name #<> ex = tell [(name, ex)]
+(#<>) :: Text -> Maybe (SomeExpansion m) -> ExpansionMap m
+name #<> ex = ExpansionMapM $ modify' ((name, ex) :)
 
-unbind :: Text -> Writer [(Text, Maybe m)] ()
+unbind :: Text -> ExpansionMap m
 unbind k = k #<> Nothing
 
 -- Expansions
 
-type ExpansionMap m = Writer [(Text, Maybe (SomeExpansion m))] ()
+newtype ExpansionMapM m a = ExpansionMapM (State [(Text, Maybe (SomeExpansion m))] a)
+  deriving newtype (Functor, Applicative, Monad)
+
+type ExpansionMap m = ExpansionMapM m ()
+
 
 infixr 0 #:
 
@@ -159,10 +162,10 @@ infixr 0 #*
 name #* ex = name #: globalExpansion ex
 
 mapToNamespace :: ExpansionMap m -> Namespace m
-mapToNamespace ex = foldl' go mempty exps
+mapToNamespace (ExpansionMapM ex) = foldl' go mempty exps
   where
     go = flip $ uncurry insertExpansion
-    exps = mapMaybe sequence $ execWriter ex
+    exps = mapMaybe sequence $ execState ex []
 
 namespace :: ExpansionMap m -> SomeExpansion m
 namespace = NamespaceData . mapToNamespace
@@ -181,8 +184,8 @@ binding ::
   Ondim m a ->
   ExpansionMap m ->
   Ondim m a
-binding o exps =
-  let kvs = execWriter exps
+binding o (ExpansionMapM exps) =
+  let kvs = execState exps []
    in foldl' (flip $ uncurry withSomeExpansion) o kvs
 
 splitExpansionKey :: Text -> [Text]
