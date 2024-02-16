@@ -1,11 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 
 module Ondim.MultiWalk.Class
   ( OndimNode (..),
-    CanLift (..),
+    Expansible (..),
     Substructure (..),
     ondimCast,
   ) where
@@ -19,9 +20,9 @@ import {-# SOURCE #-} Ondim.MultiWalk.Combinators
 
 -- * CanLift class
 
-class CanLift (s :: Type) where
-  liftSub ::
-    Monad m =>
+class Expansible (s :: Type) where
+  expandSpec ::
+    (Monad m) =>
     Carrier s ->
     Ondim m (Carrier s)
 
@@ -38,32 +39,42 @@ instance {-# OVERLAPPABLE #-} Substructure target needle where
 
 -- * OndimNode class
 
-class
+type OndimNodeC t =
   ( HasSub GSubTag (ExpTypes t) t,
-    AllMods CanLift (ExpTypes t),
-    CanLift (NodeListSpec t),
+    AllMods Expansible (ExpTypes t),
+    Expansible (NodeListSpec t),
     Carrier (NodeListSpec t) ~ [t],
     OndimCast t
-  ) =>
-  OndimNode t
-  where
+  )
+
+class (OndimNodeC t) => OndimNode t where
   type ExpTypes t :: Spec
   type NodeListSpec t :: Type
   type NodeListSpec t = NLDef t
+
+  -- | Returns the name of the node as defined by the 'OndimNode' instance.
   identify :: t -> Maybe Text
   identify _ = Nothing
-  attributes :: Monad m => t -> Ondim m [Attribute]
+
+  -- | Returns a list of attributes of the node as defined by the 'OndimNode' instance.
+  attributes :: (Monad m) => t -> Ondim m [Attribute]
   attributes _ = pure []
+
+  -- | Returns the children of the node as defined by the 'OndimNode' instance.
   children :: t -> [t]
   children _ = []
-  castFrom :: Typeable a => Proxy a -> Maybe (a -> [t])
+
+  castFrom :: (Typeable a) => Proxy a -> Maybe (a -> [t])
   castFrom _ = Nothing
+
+  -- | Converts the node to a 'LByteString' as defined by the 'OndimNode' instance.
   renderNode :: Maybe (t -> LByteString)
   renderNode = Nothing
+
   nodeAsText :: Maybe (t -> Text)
   nodeAsText = Nothing
 
-instance OndimNode a => OndimNode [a] where
+instance (OndimNode a) => OndimNode [a] where
   type ExpTypes [a] = 'SpecSelf (NodeList a)
   type NodeListSpec [a] = Trav [] (NodeList a)
   castFrom p = (one .) <$> castFrom p
@@ -82,15 +93,15 @@ instance OndimNode LByteString where
 instance OndimNode (Text, Text) where
   type ExpTypes (Text, Text) = 'SpecLeaf
 
-class Typeable a => OndimCast a where
-  ondimCast :: OndimNode b => Maybe (a -> [b])
+class (Typeable a) => OndimCast a where
+  ondimCast :: (OndimNode b) => Maybe (a -> [b])
 
 instance {-# OVERLAPPABLE #-} (Typeable a) => OndimCast a where
-  ondimCast :: forall b. OndimNode b => Maybe (a -> [b])
+  ondimCast :: forall b. (OndimNode b) => Maybe (a -> [b])
   ondimCast = castFrom Proxy
 
 instance (OndimCast a) => OndimCast [a] where
-  ondimCast :: forall b. OndimNode b => Maybe ([a] -> [b])
+  ondimCast :: forall b. (OndimNode b) => Maybe ([a] -> [b])
   ondimCast
     | Just Refl <- eqT @b @a = Just id
     | otherwise = castFrom Proxy <|> foldMap' <$> ondimCast

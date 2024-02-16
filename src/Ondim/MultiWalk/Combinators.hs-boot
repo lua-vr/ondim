@@ -5,11 +5,11 @@ module Ondim.MultiWalk.Combinators where
 
 import Control.MultiWalk.HasSub (SubSpec)
 import Type.Errors qualified as TE
-import {-# SOURCE #-} Ondim.MultiWalk.Class (OndimNode, CanLift)
+import {-# SOURCE #-} Ondim.MultiWalk.Class (OndimNode, Expansible)
 
-instance OndimNode a => CanLift (NLDef a)
-instance OndimNode a => CanLift (NodeList a)
-instance (CanLift a, Traversable f) => CanLift (Trav f a)
+instance OndimNode a => Expansible (NLDef a)
+instance OndimNode a => Expansible (NodeList a)
+instance (Expansible a, Traversable f) => Expansible (Trav f a)
 
 data NLDef (a :: Type)
 type role NLDef phantom

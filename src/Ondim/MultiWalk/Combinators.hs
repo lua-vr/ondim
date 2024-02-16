@@ -23,7 +23,7 @@ module Ondim.MultiWalk.Combinators
     ModSub,
 
     -- ** Internal
-    CanLift (..),
+    Expansible (..),
     Substructure (..),
     AllMods,
     NLDef,
@@ -33,7 +33,7 @@ where
 import Control.MultiWalk.HasSub (AllMods, GSubTag, SelSpec, Spec (..), SubSpec (..))
 import Control.MultiWalk.HasSub qualified as HS
 import Ondim.MultiWalk.Basic
-import Ondim.MultiWalk.Class (OndimNode (..), CanLift (..), Substructure (..))
+import Ondim.MultiWalk.Class (OndimNode (..), Expansible (..), Substructure (..))
 import Ondim.MultiWalk.Core
 import Ondim.MultiWalk.Substructure
 import Type.Errors qualified as TE
@@ -57,8 +57,8 @@ type instance HS.Carrier OCTag a = Carrier a
 
 data NLDef (a :: Type)
 
-instance OndimNode a => CanLift (NLDef a) where
-  liftSub = foldMapM liftNode
+instance OndimNode a => Expansible (NLDef a) where
+  expandSpec = foldMapM expandNode
 
 instance OndimNode a => Substructure a (NLDef a) where
   getSub = id
@@ -69,8 +69,8 @@ type NL = NodeList
 -- | @'NodeList' a@ matches @[a]@ where @a@ is a 'OndimNode'
 data NodeList (a :: Type)
 
-instance OndimNode a => CanLift (NodeList a) where
-  liftSub = liftNodes
+instance OndimNode a => Expansible (NodeList a) where
+  expandSpec = expandNodes
 
 instance OndimNode a => Substructure a (NodeList a) where
   getSub = id
@@ -79,12 +79,12 @@ instance OndimNode a => Substructure a (NodeList a) where
 data MatchWith (s :: Type) (a :: Type)
 
 instance
-  ( CanLift a,
+  ( Expansible a,
     Coercible (Carrier a) b
   ) =>
-  CanLift (MatchWith b a)
+  Expansible (MatchWith b a)
   where
-  liftSub = fmap coerce . liftSub @a . coerce
+  expandSpec = fmap coerce . expandSpec @a . coerce
 
 instance
   ( Substructure s a,
@@ -100,13 +100,13 @@ pretend it's a NodeList.
 data OneSub (a :: Type)
 
 instance
-  ( CanLift a,
+  ( Expansible a,
     Carrier a ~ [a],
     Monoid a
   ) =>
-  CanLift (OneSub a)
+  Expansible (OneSub a)
   where
-  liftSub (x :: a) = mconcat <$> liftSub @a [x]
+  expandSpec (x :: a) = mconcat <$> expandSpec @a [x]
 
 instance
   ( Substructure k a,
@@ -121,12 +121,12 @@ instance
 data Trav (f :: Type -> Type) (a :: Type)
 
 instance
-  ( CanLift a,
+  ( Expansible a,
     Traversable f
   ) =>
-  CanLift (Trav f a)
+  Expansible (Trav f a)
   where
-  liftSub = traverse (liftSub @a)
+  expandSpec = traverse (expandSpec @a)
 
 instance
   ( Substructure s a,
@@ -142,9 +142,9 @@ data Nesting (b :: Type)
 instance
   ( OndimNode b
   ) =>
-  CanLift (Nesting b)
+  Expansible (Nesting b)
   where
-  liftSub = liftSubstructures
+  expandSpec = expandSubstructures
 
 instance
   ( OndimNode b,
@@ -161,12 +161,12 @@ class Conversible a b where
   updateFrom :: a -> b -> a
 
 instance
-  ( CanLift a,
+  ( Expansible a,
     Conversible s (Carrier a)
   ) =>
-  CanLift (Converting s a)
+  Expansible (Converting s a)
   where
-  liftSub x = fmap (updateFrom x) $ liftSub @a $ convertTo x
+  expandSpec x = fmap (updateFrom x) $ expandSpec @a $ convertTo x
 
 instance
   ( Substructure k a,
@@ -180,12 +180,12 @@ data Sequence (a :: Type) (b :: Type)
 
 instance
   ( Carrier a ~ Carrier b,
-    CanLift a,
-    CanLift b
+    Expansible a,
+    Expansible b
   ) =>
-  CanLift (Sequence a b)
+  Expansible (Sequence a b)
   where
-  liftSub = liftSub @a >=> liftSub @b
+  expandSpec = expandSpec @a >=> expandSpec @b
 
 instance
   ( Carrier a ~ Carrier b,
@@ -204,12 +204,12 @@ instance OndimNode t => Substructure t (Custom [t] tag) where
 data ModSub (needle :: Type) (spec :: [SubSpec])
 
 instance
-  ( AllMods CanLift ('SpecList spec),
+  ( AllMods Expansible ('SpecList spec),
     HasSub GSubTag ('SpecList spec) needle
   ) =>
-  CanLift (ModSub needle (spec :: [SubSpec]))
+  Expansible (ModSub needle (spec :: [SubSpec]))
   where
-  liftSub = modSubLift @('SpecList spec)
+  expandSpec = expandSpecList @('SpecList spec)
 
 instance
   ( AllMods (Substructure t) ('SpecList spec),

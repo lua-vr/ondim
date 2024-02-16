@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               ondim
+name:               ondim-latex
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -19,45 +19,25 @@ maintainer:         @lucasvr:matrix.org
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files: CHANGELOG.md
+extra-source-files: ../CHANGELOG.md
 
 library
   -- Modules included in this executable, other than Main.
   -- other-modules:
 
-  -- LANGUAGE extensions used by modules in this package.
-  exposed-modules:
-    Ondim
-    Ondim.Advanced
-    Ondim.Advanced.Substitution
-    Ondim.Debug
-    Ondim.Extra.Exceptions
-    Ondim.Extra.Expansions
-    Ondim.Extra.Standard
-    Ondim.Loading
-    Ondim.State
-
-  other-modules:
-    Ondim.MultiWalk.Basic
-    Ondim.MultiWalk.Class
-    Ondim.MultiWalk.Combinators
-    Ondim.MultiWalk.Core
-    Ondim.MultiWalk.Substructure
-
   build-depends:
-    , base                  >=4.14  && <5
-    , containers            >=0.6.0 && <0.7
-    , filepath
-    , filepattern
-    , monad-logger
-    , mtl                   >=2.2.2 && <2.4
-    , multiwalk
+    , base                 >=4.14  && <5
+    , megaparsec
+    , ondim
     , relude
-    , text
-    , type-errors           >=0.2.0 && <0.3
-    , unionmount
-    , unliftio-core
-    , unordered-containers
+    , text-builder-linear  >=0.1.2 && <0.2
+
+  other-modules:      Ondim.Targets.LaTeX.Parser
+  exposed-modules:
+    Ondim.Targets.LaTeX
+    Ondim.Targets.LaTeX.Expansions
+    Ondim.Targets.LaTeX.Instances
+    Ondim.Targets.LaTeX.Load
 
   mixins:
     base hiding (Prelude),

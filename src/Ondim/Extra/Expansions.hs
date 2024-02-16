@@ -4,6 +4,7 @@ module Ondim.Extra.Expansions where
 import Data.List qualified as L
 import Data.Map qualified as Map
 import Ondim
+import Ondim.Debug
 
 lookupAttr' ::
   (Monad m, OndimNode t) =>
@@ -12,8 +13,7 @@ lookupAttr' ::
   Ondim m Text
 lookupAttr' key node =
   maybe (throwTemplateError $ "Missing '" <> key <> "' argument.") pure
-    . L.lookup key
-    =<< attributes node
+    =<< lookupAttr key node
 
 getSingleAttr :: Text -> [Attribute] -> Maybe Text
 getSingleAttr name attrs = L.lookup name attrs <|> viaNonEmpty (fst . head) attrs
@@ -28,16 +28,16 @@ getSingleAttr' name node =
     . getSingleAttr name
     =<< attributes node
 
-identifiesAs :: OndimNode t => [Text] -> t -> Bool
-identifiesAs n = (Just n ==) . fmap splitExpansionKey . identify
+identifiesAs :: (OndimNode t) => Text -> t -> Bool
+identifiesAs n = (Just n ==) . identify
 
 -- * Lists
 
 listExp ::
-  Monad m =>
-  (a -> SomeExpansion m) ->
+  (Monad m) =>
+  (a -> NamespaceItem m) ->
   [a] ->
-  ExpansionMap m
+  NamespaceMap m
 listExp f list = do
   "size" #@ show $ length list
   unless (null list) $ "nonempty" #@ "true"
@@ -47,7 +47,7 @@ listExp f list = do
 listList ::
   forall a m t.
   (OndimNode t, Monad m) =>
-  (a -> SomeExpansion m) ->
+  (a -> NamespaceItem m) ->
   [a] ->
   Expansion m t
 listList f list node = do
@@ -58,7 +58,7 @@ listList f list node = do
       Just name -> do
         exps <- getExpansion name
         either (throwExpFailure @t name) return exps
-      Nothing -> return liftChildren
+      Nothing -> return expandChildren
   intercalateWith <- lookupAttr "intercalate" node
   let inter txt
         | Just cast <- ondimCast = intercalate (cast txt)
@@ -72,10 +72,10 @@ listList f list node = do
 -- * Assocs and maps
 
 assocsExp ::
-  Monad m =>
-  (v -> SomeExpansion m) ->
+  (Monad m) =>
+  (v -> NamespaceItem m) ->
   [(Text, v)] ->
-  ExpansionMap m
+  NamespaceMap m
 assocsExp vf obj = do
   "size" #@ show $ length obj
   unless (null obj) $ "nonempty" #@ "true"
@@ -90,10 +90,10 @@ assocsExp vf obj = do
         "value" #: vf v
 
 mapExp ::
-  Monad m =>
-  (v -> SomeExpansion m) ->
+  (Monad m) =>
+  (v -> NamespaceItem m) ->
   Map Text v ->
-  ExpansionMap m
+  NamespaceMap m
 mapExp vf obj = assocsExp vf (Map.toList obj)
 
 -- * Booleans
@@ -105,13 +105,13 @@ ifElse ::
   Expansion m t
 ifElse cond node = do
   let els = children node
-      yes = filter (not . identifiesAs ["else"]) els
+      yes = filter (not . identifiesAs "else") els
       no =
         maybe [] children $
-          find (identifiesAs ["else"]) els
+          find (identifiesAs "else") els
   if cond
-    then liftNodes yes
-    else liftNodes no
+    then expandNodes yes
+    else expandNodes no
 {-# INLINEABLE ifElse #-}
 
 -- * Text
@@ -124,14 +124,14 @@ switchWithDefault ::
 switchWithDefault tag node = do
   let els = children node
   match <- (`findM` els) \x -> do
-    if identifiesAs ["case"] x
+    if identifiesAs "case" x
       then do
         caseTag <- getSingleAttr' "id" x
         return $ Just caseTag == tag
       else return False
   fromMaybe (pure []) do
-    child <- match <|> find (identifiesAs ["default"]) els
-    pure $ liftChildren child
+    child <- match <|> find (identifiesAs "default") els
+    pure $ expandChildren child
   where
     findM p = foldr (\x -> ifM (p x) (pure $ Just x)) (pure Nothing)
 
@@ -155,7 +155,7 @@ renderExp f node = do
         Just render ->
           case ondimCast of
             Just cast -> do
-              x' <- liftSubstructures x
+              x' <- expandSubstructures x
               let t = decodeUtf8 @Text (render x')
               return $ cast t
             Nothing -> noCast

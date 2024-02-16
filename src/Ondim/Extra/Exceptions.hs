@@ -8,12 +8,13 @@ module Ondim.Extra.Exceptions
 
 import Data.Text qualified as T
 import Ondim
+import Ondim.Debug
 import Ondim.Extra.Expansions (listExp)
 
-tryExp :: Monad m => GlobalExpansion m
-tryExp node = liftChildren node `catchFailure` \_ _ _ _ -> return []
+tryExp :: (Monad m) => PolyExpansion m
+tryExp node = expandChildren node `catchFailure` \_ _ _ _ -> return []
 
-exceptionExp :: Monad m => OndimException -> ExpansionMap m
+exceptionExp :: (Monad m) => OndimException -> NamespaceMap m
 exceptionExp exc@(OndimException e t) = do
   "pretty" #@ prettyException exc
   "stack" #. listExp stackExp (expansionTrace t)
