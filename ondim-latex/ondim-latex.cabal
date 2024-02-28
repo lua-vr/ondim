@@ -19,7 +19,7 @@ maintainer:         @lucasvr:matrix.org
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files: ../CHANGELOG.md
+extra-source-files: CHANGELOG.md
 
 library
   -- Modules included in this executable, other than Main.
