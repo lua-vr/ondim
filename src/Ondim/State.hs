@@ -216,9 +216,9 @@ name #* ex = name #: polyExpansion ex
 
 -- | Runs the 'NamespaceMap' monad to get a 'Namespace'.
 mapToNamespace :: NamespaceMap m -> Namespace m
-mapToNamespace (NamespaceMapM ex) = foldl' go mempty exps
+mapToNamespace (NamespaceMapM ex) = foldr go mempty exps
   where
-    go = flip $ uncurry insertExpansion
+    go = uncurry insertExpansion
     exps = mapMaybe sequence $ execState ex []
 
 namespace :: NamespaceMap m -> NamespaceItem m
