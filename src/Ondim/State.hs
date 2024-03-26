@@ -11,7 +11,6 @@ module Ondim.State
     -- ** Typed expansions
     (##),
     typedExpansion,
-    typedExpansion',
 
     -- ** Polymorphic expansions
     (#*),
@@ -21,12 +20,10 @@ module Ondim.State
     -- ** Templates
     (#%),
     templateData,
-    templateData',
 
     -- ** Textual templates
     (#@),
     textData,
-    textData',
 
     -- ** Namespaces
     (#.),
@@ -35,8 +32,8 @@ module Ondim.State
 
     -- * Datatypes
     OndimState (..),
-    NamespaceItem,
-    Namespace,
+    NamespaceItem (..),
+    Namespace (..),
 
     -- ** Manipulate the whole state
     getOndimS,
@@ -61,7 +58,6 @@ import Data.HashMap.Strict qualified as HMap
 import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class (OndimNode)
-import Type.Reflection (typeRep)
 
 -- * User API
 
@@ -145,10 +141,7 @@ infixr 0 #:
 name #: ex = name #<> Just ex
 
 typedExpansion :: (HasCallStack, Typeable t) => Expansion m t -> NamespaceItem m
-typedExpansion = TypedExpansion typeRep callStackSite
-
-typedExpansion' :: (Typeable t) => DefinitionSite -> Expansion m t -> NamespaceItem m
-typedExpansion' = TypedExpansion typeRep
+typedExpansion = TypedExpansion callStackSite
 
 infixr 0 ##
 
@@ -162,10 +155,7 @@ name '##' expansion = name '#:' 'typedExpansion' expansion
 name ## ex = name #: typedExpansion ex
 
 templateData :: forall a m. (HasCallStack, OndimNode a) => a -> NamespaceItem m
-templateData = Template typeRep callStackSite
-
-templateData' :: forall a m. (HasCallStack, OndimNode a) => DefinitionSite -> a -> NamespaceItem m
-templateData' = Template typeRep
+templateData = TemplateData callStackSite
 
 infixr 0 #%
 
@@ -181,9 +171,6 @@ name #% ex = name #: templateData ex
 
 textData :: (HasCallStack) => Text -> NamespaceItem m
 textData = templateData
-
-textData' :: DefinitionSite -> Text -> NamespaceItem m
-textData' = templateData'
 
 infixr 0 #@
 

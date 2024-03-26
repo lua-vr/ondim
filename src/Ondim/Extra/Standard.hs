@@ -195,6 +195,6 @@ bind node = do
       else return $ children node
   case getSingleAttr "id" attrs of
     Just name -> do
-      putSomeExpansion name . Just $ templateData' defSite thing
+      putSomeExpansion name . Just $ TemplateData defSite thing
       pure []
     Nothing -> throwTemplateError "No name for expansion"

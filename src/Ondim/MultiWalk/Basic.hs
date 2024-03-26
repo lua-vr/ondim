@@ -15,7 +15,7 @@ import GHC.Exts qualified as GHC
 import {-# SOURCE #-} Ondim.MultiWalk.Class
 import {-# SOURCE #-} Ondim.MultiWalk.Combinators (Carrier)
 import System.FilePath (takeExtensions)
-import Type.Reflection (SomeTypeRep, TypeRep, someTypeRep)
+import Type.Reflection (SomeTypeRep, someTypeRep)
 
 -- * Monad
 
@@ -68,8 +68,7 @@ callStackSite = case GHC.toList callStack of
 
 -- Expansions
 
-{- | An expansion.
--}
+-- | An expansion.
 type Expansion m t = t -> Ondim m [t]
 
 {- | A namespace. Internally represented as a hashmap from 'Text' keys to
@@ -80,24 +79,25 @@ newtype Namespace m = Namespace {getExpansions :: HashMap Text (NamespaceItem m)
 -- | An expansion that is polymorphic on the type.
 type PolyExpansion m = forall a. (OndimNode a, Monad m) => Expansion m a
 
--- | An opaque datatype that should be regarded as a sum of four possible types:
---
---   1. Typed expansions, i.e., expansions that apply to a single type (use the
---   'Ondim.State.typedExpansion' constructor).
---
---   2. Polymorphic expansions, i.e., expansions that are polymophic over types
---   with 'OndimNode' instances (use the 'Ondim.State.polyExpansion'
---   constructor).
---
---   3. Templates, i.e., raw node data that represents templates. (use the
---   'Ondim.State.templateData' constructor).
---
---   4. Namespaces, i.e., nested namespaces. (use the 'Ondim.State.namespace'
---   constructor).
+{- | An opaque datatype that should be regarded as a sum of four possible types:
+
+  1. Typed expansions, i.e., expansions that apply to a single type (use the
+  'Ondim.State.typedExpansion' constructor).
+
+  2. Polymorphic expansions, i.e., expansions that are polymophic over types
+  with 'OndimNode' instances (use the 'Ondim.State.polyExpansion'
+  constructor).
+
+  3. Templates, i.e., raw node data that represents templates. (use the
+  'Ondim.State.templateData' constructor).
+
+  4. Namespaces, i.e., nested namespaces. (use the 'Ondim.State.namespace'
+  constructor).
+-}
 data NamespaceItem m where
-  TypedExpansion :: TypeRep a -> DefinitionSite -> Expansion m a -> NamespaceItem m
+  TypedExpansion :: Typeable a => DefinitionSite -> Expansion m a -> NamespaceItem m
   PolyExpansion :: DefinitionSite -> PolyExpansion m -> NamespaceItem m
-  Template :: (OndimNode a) => TypeRep a -> DefinitionSite -> a -> NamespaceItem m
+  TemplateData :: (OndimNode a) => DefinitionSite -> a -> NamespaceItem m
   NamespaceData :: Namespace m -> NamespaceItem m
 
 instance Semigroup (Namespace m) where
@@ -144,16 +144,16 @@ data ExceptionType
   | -- | Template errors are not meant to be catched from within the templates.
     -- Instead, they point at user errors that are supposed to be fixed.
     TemplateError
-      -- | Call stack
       CallStack
-      -- | Custom error message.
+      -- ^ Call stack
       Text
+      -- ^ Custom error message.
   | -- | Failures are expected in some sense.
     Failure
-      -- | Type representation of the node which triggered the failure.
       SomeTypeRep
-      -- | Identifier of the node which triggered the failure.
+      -- ^ Type representation of the node which triggered the failure.
       Text
+      -- ^ Identifier of the node which triggered the failure.
       OndimFailure
   deriving (Show, Exception)
 
@@ -163,12 +163,12 @@ data OndimFailure
     NotBound
   | -- | Expansion bound under identifier has mismatched type.
     ExpansionWrongType
-      -- | Type representation of the expansion that is bound under the identifier.
       SomeTypeRep
+      -- ^ Type representation of the expansion that is bound under the identifier.
   | -- | Expansion bound under identifier has mismatched type.
     TemplateWrongType
-      -- | Type representation of the expansion that is bound under the identifier.
       SomeTypeRep
+      -- ^ Type representation of the expansion that is bound under the identifier.
   | -- | Custom failure.
     FailureOther Text
   deriving (Show, Exception)
@@ -176,10 +176,11 @@ data OndimFailure
 data OndimException = OndimException ExceptionType TraceData
   deriving (Show, Exception)
 
--- | Run subcomputation without (most) "not bound" errors. More specifically, if
--- 'Ondim.expandNode' finds a node whose identifier is not bound, it will not
--- throw an error and instead treat it as if it had no identifier, i.e., it will
--- ignore it and recurse into the substructures.
+{- | Run subcomputation without (most) "not bound" errors. More specifically, if
+'Ondim.expandNode' finds a node whose identifier is not bound, it will not
+throw an error and instead treat it as if it had no identifier, i.e., it will
+ignore it and recurse into the substructures.
+-}
 withoutNBErrors :: (Monad m) => Ondim m a -> Ondim m a
 withoutNBErrors = Ondim . local f . unOndimT
   where

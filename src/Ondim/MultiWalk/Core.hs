@@ -16,10 +16,11 @@ import Control.MultiWalk.HasSub (AllMods, GSubTag)
 import Control.MultiWalk.HasSub qualified as HS
 import Data.Bitraversable (bimapM)
 import Data.HashMap.Strict qualified as HMap
+import Data.Typeable (eqT, (:~:) (..))
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class
 import Ondim.State
-import Type.Reflection (SomeTypeRep (..), eqTypeRep, someTypeRep, typeRep, (:~~:) (..))
+import Type.Reflection (SomeTypeRep, someTypeRep)
 import Prelude hiding (All)
 
 -- Get stuff from state
@@ -31,12 +32,11 @@ fromTemplate ::
   b ->
   Either OndimFailure (Ondim m [a])
 fromTemplate site value
-  | Just HRefl <- brep `eqTypeRep` typeRep @a = Right (one <$> lifted)
+  | Just Refl <- eqT @a @b = Right (one <$> lifted)
   | Just cast <- ondimCast = Right $ cast <$> lifted
-  | otherwise = Left $ TemplateWrongType (SomeTypeRep brep)
+  | otherwise = Left $ TemplateWrongType (someTypeRep (Proxy @b))
   where
     lifted = withSite site (expandSubstructures value)
-    brep = typeRep @b
 
 templateToExpansion ::
   forall m t.
@@ -48,10 +48,10 @@ templateToExpansion tpl inner = do
   attrs <- attributes inner
   tpl `binding` do
     "caller" #. do
-      "children" #: templateData' callSite (children inner)
-      unless (null attrs)
-        $ "attrs"
-        #. forM_ attrs (uncurry (#@))
+      "children" #: TemplateData callSite (children inner)
+      unless (null attrs) $
+        "attrs"
+          #. forM_ attrs (uncurry (#@))
 
 fromSomeExpansion ::
   forall a m.
@@ -62,10 +62,10 @@ fromSomeExpansion ::
 fromSomeExpansion callSite someExp =
   case someExp' of
     (PolyExpansion site e) -> Right (e, site)
-    (TypedExpansion t site v)
-      | Just HRefl <- t `eqTypeRep` typeRep @a -> Right (v, site)
-      | otherwise -> Left $ ExpansionWrongType (SomeTypeRep t)
-    (Template _ site v) -> do
+    (TypedExpansion @t site v)
+      | Just Refl <- eqT @a @t -> Right (v, site)
+      | otherwise -> Left $ ExpansionWrongType (someTypeRep (Proxy @t))
+    (TemplateData site v) -> do
       thing <- fromTemplate site v
       return (templateToExpansion thing, site)
     NamespaceData {} -> Left $ ExpansionWrongType (someTypeRep (Proxy @Namespace))
@@ -84,19 +84,25 @@ getText :: forall m. (Monad m) => Text -> Ondim m (Either OndimFailure Text)
 getText name = do
   mbValue <- Ondim $ gets (lookup name . expansions)
   case mbValue of
-    Just (Template trep site thing)
-      | Just HRefl <- typeRep @Text `eqTypeRep` trep -> return $ Right thing
+    Just (TemplateData @t site thing)
+      | Just Refl <- eqT' @Text @t -> return $ Right thing
       | Just cast <- nodeAsText -> Right . cast <$> withSite site (expandSubstructures thing)
-      | otherwise -> return $ Left $ TemplateWrongType (SomeTypeRep trep)
+      | otherwise -> return $ Left $ TemplateWrongType (typeRep' @t)
     -- bimapM return id $ fromTemplate site thing
     Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
     Nothing -> return $ Left NotBound
+  where
+    -- Small hacks (this is due to hs-boot superclass witness issues)
+    eqT' :: forall a b. (Typeable a, OndimNode b) => Maybe (a :~: b)
+    eqT' = eqT @a @b
+    typeRep' :: forall a. (OndimNode a) => SomeTypeRep
+    typeRep' = someTypeRep (Proxy @a)
 
 getTemplate :: forall m a. (OndimNode a, Monad m) => Text -> Ondim m (Either OndimFailure [a])
 getTemplate name = do
   mbValue <- Ondim $ gets (lookup name . expansions)
   case mbValue of
-    Just (Template _ site thing) ->
+    Just (TemplateData site thing) ->
       bimapM return id $ fromTemplate site thing
     Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
     Nothing -> return $ Left NotBound

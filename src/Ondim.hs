@@ -172,7 +172,7 @@ renderTemplateOrError :: (HasCallStack, Monad m) => Text -> Ondim m LByteString
 renderTemplateOrError name = do
   mbValue <- Ondim $ gets (lookup name . expansions)
   case mbValue of
-    Just (Template _ site thing) ->
+    Just (TemplateData site thing) ->
       renderNodeOrError
         =<< withSite site (expandSubstructures thing)
     Just _ -> throwExpFailure @() name (FailureOther "Identifier not bound to a template.")

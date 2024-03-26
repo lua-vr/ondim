@@ -45,7 +45,7 @@ type LoadFn n =
 
 -- | Default way to load a template. In most cases you should use this recipe.
 loadFnSimple :: (OndimNode a) => (FilePath -> LByteString -> Either String a) -> LoadFn n
-loadFnSimple fn fp bs = templateData' site $ either throw' id $ fn fp bs
+loadFnSimple fn fp bs = TemplateData site $ either throw' id $ fn fp bs
   where
     site = fileSite fp
     throw' = throw . TemplateLoadingException
