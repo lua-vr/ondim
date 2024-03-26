@@ -1,5 +1,5 @@
 {- | This module defines helper functions for loading templates from a list of
-   directories, optionally using @fsnotify@ for wacthing and reloading on file
+   directories, optionally using @fsnotify@ for watching and reloading on file
    changes. There is also a helper for loading templates at compile-time via the
    @file-embed@ package.
 -}
@@ -10,8 +10,8 @@ module Ondim.Loading
     -- * \"Advanced\" usage
     --
     -- | There are default 'LoadConfig's inside each target's respective
-    -- modules, but you can also use the definitions below customize them if you
-    -- wish.
+    -- modules, but you can also use the definitions below to customize them if
+    -- you wish.
     LoadConfig (..),
     LoadFn,
     loadFnSimple,
