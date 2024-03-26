@@ -15,7 +15,6 @@ module Ondim.State
     -- ** Polymorphic expansions
     (#*),
     polyExpansion,
-    polyExpansion',
 
     -- ** Templates
     (#%),
@@ -28,7 +27,6 @@ module Ondim.State
     -- ** Namespaces
     (#.),
     namespace,
-    namespace',
 
     -- * Datatypes
     OndimState (..),
@@ -187,9 +185,6 @@ name '#@' text = name '#:' 'textData' text
 polyExpansion :: (HasCallStack) => PolyExpansion m -> NamespaceItem m
 polyExpansion = PolyExpansion callStackSite
 
-polyExpansion' :: DefinitionSite -> PolyExpansion m -> NamespaceItem m
-polyExpansion' = PolyExpansion
-
 infixr 0 #*
 
 {- | Infix to add a t'PolyExpansion' to a 'NamespaceMap'.
@@ -210,9 +205,6 @@ mapToNamespace (NamespaceMapM ex) = foldr go mempty exps
 
 namespace :: NamespaceMap m -> NamespaceItem m
 namespace = NamespaceData . mapToNamespace
-
-namespace' :: Namespace m -> NamespaceItem m
-namespace' = NamespaceData
 
 infixr 0 #.
 
