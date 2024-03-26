@@ -54,7 +54,7 @@ data DefinitionSite
   = CodeDefinition SrcLoc
   | FileDefinition {definitionPath :: FilePath, definitionExt :: Text}
   | NoDefinition
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 fileSite :: FilePath -> DefinitionSite
 fileSite fp = FileDefinition fp exts
@@ -75,6 +75,7 @@ type Expansion m t = t -> Ondim m [t]
    @'NamespaceItem' m@ values.
 -}
 newtype Namespace m = Namespace {hashmap :: HashMap Text (NamespaceItem m)}
+  deriving (Generic)
 
 -- | An expansion that is polymorphic on the type.
 type PolyExpansion m = forall a. (OndimNode a, Monad m) => Expansion m a
