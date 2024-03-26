@@ -74,7 +74,7 @@ type Expansion m t = t -> Ondim m [t]
 {- | A namespace. Internally represented as a hashmap from 'Text' keys to
    @'NamespaceItem' m@ values.
 -}
-newtype Namespace m = Namespace {getExpansions :: HashMap Text (NamespaceItem m)}
+newtype Namespace m = Namespace {hashmap :: HashMap Text (NamespaceItem m)}
 
 -- | An expansion that is polymorphic on the type.
 type PolyExpansion m = forall a. (OndimNode a, Monad m) => Expansion m a
