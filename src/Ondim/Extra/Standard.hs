@@ -57,7 +57,7 @@ ifBound node = do
   bound <- allM exists attrs
   ifElse bound node
   where
-    exists n = isJust . lookupExpansion n . expansions <$> getOndimS
+    exists n = isJust . lookup n . expansions <$> getOndimS
 
 {- | This expansion expands its children depending on whether any of the specified
    expansions are bound or not.
@@ -77,7 +77,7 @@ anyBound node = do
   bound <- anyM exists attrs
   ifElse bound node
   where
-    exists n = isJust . lookupExpansion n . expansions <$> getOndimS
+    exists n = isJust . lookup n . expansions <$> getOndimS
 
 {- | This expansion allows you to case match on the (textual) value of another
    expansion, or return a (optional) default clause.
@@ -137,7 +137,7 @@ with node = do
   exps <- expansions <$> getOndimS
   actions <-
     attributes node <&> map \(k, v) ->
-      let expansion = lookupExpansion v exps
+      let expansion = lookup v exps
        in withoutExpansions [v] . withSomeExpansion k expansion
   foldr ($) (expandChildren node) actions
 

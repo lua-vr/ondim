@@ -50,9 +50,9 @@ module Ondim.State
     withNamespace,
 
     -- ** Altering namespaces
-    lookupExpansion,
-    insertExpansion,
-    deleteExpansion,
+    lookup,
+    insert,
+    delete,
   )
 where
 
@@ -85,11 +85,11 @@ withSomeExpansion ::
   Ondim m a ->
   Ondim m a
 withSomeExpansion name ex st = do
-  pEx <- Ondim $ gets (lookupExpansion name . expansions)
+  pEx <- Ondim $ gets (lookup name . expansions)
   Ondim $ modify' \s -> s {expansions = insOrDel ex (expansions s)}
   st <* modifyOndimS \s -> s {expansions = insOrDel pEx (expansions s)}
   where
-    insOrDel = maybe (deleteExpansion name) (insertExpansion name)
+    insOrDel = maybe (delete name) (insert name)
 
 -- | Bind a namespace locally.
 withNamespace :: (Monad m) => Namespace m -> Ondim m a -> Ondim m a
@@ -105,7 +105,7 @@ putSomeExpansion :: (Monad m) => Text -> Maybe (NamespaceItem m) -> Ondim m ()
 putSomeExpansion name ex =
   modifyOndimS \s -> s {expansions = insOrDel ex (expansions s)}
   where
-    insOrDel = maybe (deleteExpansion name) (insertExpansion name)
+    insOrDel = maybe (delete name) (insert name)
 
 infixr 0 #<>
 
@@ -218,7 +218,7 @@ name #* ex = name #: polyExpansion ex
 mapToNamespace :: NamespaceMap m -> Namespace m
 mapToNamespace (NamespaceMapM ex) = foldr go mempty exps
   where
-    go = uncurry insertExpansion
+    go = uncurry insert
     exps = mapMaybe sequence $ execState ex []
 
 namespace :: NamespaceMap m -> NamespaceItem m
@@ -250,11 +250,11 @@ binding o (NamespaceMapM exps) =
   let kvs = execState exps []
    in foldl' (flip $ uncurry withSomeExpansion) o kvs
 
-splitExpansionKey :: Text -> [Text]
-splitExpansionKey = T.split (\c -> c /= '-' && not (isLetter c))
+splitNamespaceKey :: Text -> [Text]
+splitNamespaceKey = T.split (\c -> c /= '-' && not (isLetter c))
 
-lookupExpansion' :: [Text] -> Namespace m -> Maybe (NamespaceItem m)
-lookupExpansion' keys (Namespace e) = go keys e
+lookupNamespaceItem' :: [Text] -> Namespace m -> Maybe (NamespaceItem m)
+lookupNamespaceItem' keys (Namespace e) = go keys e
   where
     go [] _ = Nothing
     go [k] m = HMap.lookup k m
@@ -263,11 +263,11 @@ lookupExpansion' keys (Namespace e) = go keys e
       Just {} -> Nothing
       Nothing -> Nothing
 
-lookupExpansion :: Text -> Namespace m -> Maybe (NamespaceItem m)
-lookupExpansion = lookupExpansion' . splitExpansionKey
+lookup :: Text -> Namespace m -> Maybe (NamespaceItem m)
+lookup = lookupNamespaceItem' . splitNamespaceKey
 
-insertExpansion' :: [Text] -> NamespaceItem m -> Namespace m -> Namespace m
-insertExpansion' keys e (Namespace es) = Namespace $ go keys es
+insertNamespaceItem' :: [Text] -> NamespaceItem m -> Namespace m -> Namespace m
+insertNamespaceItem' keys e (Namespace es) = Namespace $ go keys es
   where
     go [] = id
     go [k] = HMap.insert k e
@@ -280,11 +280,11 @@ insertExpansion' keys e (Namespace es) = Namespace $ go keys es
             Just (NamespaceData (Namespace n)) -> go ks n
             _notNamespace -> go ks mempty
 
-insertExpansion :: Text -> NamespaceItem m -> Namespace m -> Namespace m
-insertExpansion = insertExpansion' . splitExpansionKey
+insert :: Text -> NamespaceItem m -> Namespace m -> Namespace m
+insert = insertNamespaceItem' . splitNamespaceKey
 
-deleteExpansion' :: [Text] -> Namespace m -> Namespace m
-deleteExpansion' keys v@(Namespace es) =
+deleteNamespaceItem' :: [Text] -> Namespace m -> Namespace m
+deleteNamespaceItem' keys v@(Namespace es) =
   case keys of
     [] -> v
     [k] -> Namespace $ HMap.delete k es
@@ -292,11 +292,11 @@ deleteExpansion' keys v@(Namespace es) =
   where
     go ks = HMap.update \case
       (NamespaceData n) ->
-        case deleteExpansion' ks n of
+        case deleteNamespaceItem' ks n of
           x@(Namespace hmap)
             | HMap.null hmap -> Nothing
             | otherwise -> Just $ NamespaceData x
       x -> Just x
 
-deleteExpansion :: Text -> Namespace m -> Namespace m
-deleteExpansion = deleteExpansion' . splitExpansionKey
+delete :: Text -> Namespace m -> Namespace m
+delete = deleteNamespaceItem' . splitNamespaceKey

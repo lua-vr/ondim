@@ -170,7 +170,7 @@ renderNodeOrError =
 -- | Expand and then render template called 'name' to bytestring.
 renderTemplateOrError :: (HasCallStack, Monad m) => Text -> Ondim m LByteString
 renderTemplateOrError name = do
-  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
+  mbValue <- Ondim $ gets (lookup name . expansions)
   case mbValue of
     Just (Template _ site thing) ->
       renderNodeOrError

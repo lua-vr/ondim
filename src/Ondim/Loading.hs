@@ -55,7 +55,7 @@ fpToIdentifier = toText . intercalate "." . splitDirectories
 
 loadFnToUpdate :: LoadFn n -> FilePath -> Text -> LByteString -> OndimState n -> OndimState n
 loadFnToUpdate fn fp name bs s =
-  s {expansions = insertExpansion name res (expansions s)}
+  s {expansions = insert name res (expansions s)}
   where
     res = fn fp bs
 
@@ -99,7 +99,7 @@ loadTemplatesDynamic cfgs places =
                       let dir = snd $ minimumOn1 fst (fst <$> ls)
                           fp = dir </> file
                        in readFileLBS fp <&> loadFnToUpdate (cfgMap ! i) fp name
-                    Delete -> pure \s -> s {expansions = deleteExpansion name (expansions s)} <> initial
+                    Delete -> pure \s -> s {expansions = delete name (expansions s)} <> initial
    in unionMount sources patts exclude initial handler
 
 -- | Load templates from a list of directories in descending order of priority.

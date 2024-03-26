@@ -76,13 +76,13 @@ fromSomeExpansion callSite someExp =
       (NamespaceData ns@(Namespace n))
         | Just v <- HMap.lookup "" n -> v
         | FileDefinition _ ext <- callSite,
-          Just v <- lookupExpansion ext ns ->
+          Just v <- lookup ext ns ->
             v
       _nonNamespace -> someExp
 
 getText :: forall m. (Monad m) => Text -> Ondim m (Either OndimFailure Text)
 getText name = do
-  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
+  mbValue <- Ondim $ gets (lookup name . expansions)
   case mbValue of
     Just (Template trep site thing)
       | Just HRefl <- typeRep @Text `eqTypeRep` trep -> return $ Right thing
@@ -94,7 +94,7 @@ getText name = do
 
 getTemplate :: forall m a. (OndimNode a, Monad m) => Text -> Ondim m (Either OndimFailure [a])
 getTemplate name = do
-  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
+  mbValue <- Ondim $ gets (lookup name . expansions)
   case mbValue of
     Just (Template _ site thing) ->
       bimapM return id $ fromTemplate site thing
@@ -106,7 +106,7 @@ getNamespace ::
   Text ->
   Ondim m (Either OndimFailure (Namespace m))
 getNamespace name = do
-  mbValue <- Ondim $ gets (lookupExpansion name . expansions)
+  mbValue <- Ondim $ gets (lookup name . expansions)
   case mbValue of
     Just (NamespaceData n) -> return $ Right n
     Just _ -> return $ Left (FailureOther "Identifier not bound to a namespace.")
@@ -118,7 +118,7 @@ getExpansion ::
   Text ->
   Ondim m (Either OndimFailure (Expansion m t))
 getExpansion name = do
-  mbValue <- Ondim $ gets $ lookupExpansion name . expansions
+  mbValue <- Ondim $ gets $ lookup name . expansions
   site <- getCurrentSite
   return do
     value <- maybeToRight NotBound mbValue
