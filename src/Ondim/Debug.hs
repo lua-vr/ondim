@@ -19,6 +19,7 @@ module Ondim.Debug
       -- * Definition sites
       DefinitionSite (..),
       getCurrentSite,
+      withSite,
       fileSite,
       callStackSite,
     ) where
