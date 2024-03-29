@@ -6,7 +6,7 @@ import Ondim.Loading (LoadConfig (..), loadFnSimple)
 import Ondim.Targets.Whiskers.Expansions (defaultState)
 import Ondim.Targets.Whiskers.Parser (parseWhiskers)
 
-loadWhiskers :: Monad m => (Text, Text) -> LoadConfig m
+loadWhiskers :: (Text, Text) -> LoadConfig s
 loadWhiskers d = LoadConfig {..}
   where
     patterns = ["**/*.w.*"]

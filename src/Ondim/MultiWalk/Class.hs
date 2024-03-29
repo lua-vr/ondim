@@ -20,11 +20,10 @@ import {-# SOURCE #-} Ondim.MultiWalk.Combinators
 
 -- * CanLift class
 
-class Expansible (s :: Type) where
+class Expansible (t :: Type) where
   expandSpec ::
-    (Monad m) =>
-    Carrier s ->
-    Ondim m (Carrier s)
+    Carrier t ->
+    Ondim s (Carrier t)
 
 -- * Substructure class
 
@@ -57,7 +56,7 @@ class (OndimNodeC t) => OndimNode t where
   identify _ = Nothing
 
   -- | Returns a list of attributes of the node as defined by the 'OndimNode' instance.
-  attributes :: (Monad m) => t -> Ondim m [Attribute]
+  attributes :: t -> Ondim s [Attribute]
   attributes _ = pure []
 
   -- | Returns the children of the node as defined by the 'OndimNode' instance.

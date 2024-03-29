@@ -6,7 +6,7 @@ import Ondim.Loading (LoadConfig (..), loadFnSimple)
 import Ondim.Targets.LaTeX.Expansions (defaultState)
 import Ondim.Targets.LaTeX.Parser (parseLaTeX)
 
-loadLaTeX :: Monad m => LoadConfig m
+loadLaTeX :: LoadConfig s
 loadLaTeX = LoadConfig {..}
   where
     patterns = ["**/*.tex"]

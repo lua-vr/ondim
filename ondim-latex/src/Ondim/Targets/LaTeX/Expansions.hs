@@ -5,7 +5,7 @@ import Ondim.Extra.Expansions
 import Ondim.Extra.Standard (standardMap)
 import Ondim.Targets.LaTeX.Instances (Node (..), escapeLaTeX)
 
-defaultState :: Monad m => OndimState m
+defaultState :: OndimState s
 defaultState =
   OndimState
     { expansions = exps

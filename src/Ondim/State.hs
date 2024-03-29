@@ -56,46 +56,52 @@ import Data.HashMap.Strict qualified as HMap
 import Data.Text qualified as T
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class (OndimNode)
+import Data.STRef (readSTRef, modifySTRef', writeSTRef)
 
 -- * User API
 
 -- State manipulation
 
 -- | Get the Ondim state.
-getOndimS :: (Monad m) => Ondim m (OndimState m)
-getOndimS = Ondim get
+getOndimS :: Ondim s (OndimState s)
+getOndimS = do
+  ref <- Ondim $ asks snd
+  liftST $ readSTRef ref
 
-modifyOndimS :: (Monad m) => (OndimState m -> OndimState m) -> Ondim m ()
-modifyOndimS = Ondim . modify'
+modifyOndimS :: (OndimState s -> OndimState s) -> Ondim s ()
+modifyOndimS f = do
+  ref <- Ondim $ asks snd
+  liftST $ modifySTRef' ref f
 
-putOndimS :: (Monad m) => OndimState m -> Ondim m ()
-putOndimS = Ondim . put
+putOndimS :: OndimState s -> Ondim s ()
+putOndimS s = do
+  ref <- Ondim $ asks snd
+  liftST $ writeSTRef ref s
 
 -- | Either bind or unbind an expansion locally.
 withSomeExpansion ::
-  (Monad m) =>
   Text ->
-  Maybe (NamespaceItem m) ->
-  Ondim m a ->
-  Ondim m a
+  Maybe (NamespaceItem s) ->
+  Ondim s a ->
+  Ondim s a
 withSomeExpansion name ex st = do
-  pEx <- Ondim $ gets (lookup name . expansions)
-  Ondim $ modify' \s -> s {expansions = insOrDel ex (expansions s)}
+  pEx <- lookup name . expansions <$> getOndimS
+  modifyOndimS \s -> s {expansions = insOrDel ex (expansions s)}
   st <* modifyOndimS \s -> s {expansions = insOrDel pEx (expansions s)}
   where
     insOrDel = maybe (delete name) (insert name)
 
 -- | Bind a namespace locally.
-withNamespace :: (Monad m) => Namespace m -> Ondim m a -> Ondim m a
+withNamespace :: Namespace s -> Ondim s a -> Ondim s a
 withNamespace (Namespace exps) o =
   foldr (\(k, v) -> withSomeExpansion k (Just v)) o (HMap.toList exps)
 
 -- | Unbind a list of expansions locally.
-withoutExpansions :: (Monad m) => [Text] -> Ondim m a -> Ondim m a
+withoutExpansions :: [Text] -> Ondim s a -> Ondim s a
 withoutExpansions names o = foldr (`withSomeExpansion` Nothing) o names
 
 -- | Either put or delete an expansion from the state.
-putSomeExpansion :: (Monad m) => Text -> Maybe (NamespaceItem m) -> Ondim m ()
+putSomeExpansion :: Text -> Maybe (NamespaceItem s) -> Ondim s ()
 putSomeExpansion name ex =
   modifyOndimS \s -> s {expansions = insOrDel ex (expansions s)}
   where
@@ -221,10 +227,9 @@ name #. ex = name #: namespace ex
    by using 'NamespaceMap's.
 -}
 binding ::
-  (Monad m) =>
-  Ondim m a ->
-  NamespaceMap m ->
-  Ondim m a
+  Ondim s a ->
+  NamespaceMap s ->
+  Ondim s a
 binding o (NamespaceMapM exps) =
   let kvs = execState exps []
    in foldl' (flip $ uncurry withSomeExpansion) o kvs

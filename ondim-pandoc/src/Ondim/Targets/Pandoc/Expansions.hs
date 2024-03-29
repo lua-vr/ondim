@@ -5,7 +5,7 @@ import Ondim.Extra.Standard (standardMap)
 import Ondim.Targets.Pandoc.Instances ()
 import Text.Pandoc (Block (..), ListNumberDelim (..), ListNumberStyle (..))
 
-defaultState :: Monad m => OndimState m
+defaultState :: OndimState s
 defaultState =
   OndimState
     { expansions = exps

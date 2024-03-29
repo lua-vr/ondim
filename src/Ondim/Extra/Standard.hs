@@ -22,7 +22,7 @@ import Ondim.Extra.Exceptions (tryExp)
 import Ondim.Extra.Expansions
 
 -- | Namespace including all expansions defined in this module.
-standardMap :: NamespaceMap m
+standardMap :: NamespaceMap s
 standardMap = do
   -- Control flow
   "if" #* ifBound
@@ -51,7 +51,7 @@ standardMap = do
    >   </e:else>
    > </e:if>
 -}
-ifBound :: PolyExpansion m
+ifBound :: PolyExpansion s
 ifBound node = do
   attrs <- T.split (== ',') <$> getSingleAttr' "id" node
   bound <- allM exists attrs
@@ -71,7 +71,7 @@ ifBound node = do
    >   </e:else>
    > </e:any>
 -}
-anyBound :: PolyExpansion m
+anyBound :: PolyExpansion s
 anyBound node = do
   attrs <- fst <<$>> attributes node
   bound <- anyM exists attrs
@@ -90,7 +90,7 @@ anyBound node = do
    >   <e:default>Some shoes</e:default>
    > </e:any>
 -}
-matchBound :: PolyExpansion m
+matchBound :: PolyExpansion s
 matchBound node = do
   tag <- getSingleAttr' "id" node
   tagC <- getText tag
@@ -102,7 +102,7 @@ matchBound node = do
    > <!-- I'll be rendered as a normal HTML comment -->
    > <e:ignore>But I'll not be rendered in the output at all.</e:ignore>
 -}
-ignore :: PolyExpansion m
+ignore :: PolyExpansion s
 ignore = const $ pure []
 
 {- | This expansion renames other expansions inside of it.
@@ -114,7 +114,7 @@ ignore = const $ pure []
    >   <e:new-hello /> <e:new-world />
    > <e:with/>
 -}
-open :: PolyExpansion m
+open :: PolyExpansion s
 open node = do
   name <- getSingleAttr' "id" node
   exps <- getNamespace name
@@ -132,7 +132,7 @@ open node = do
    >   <e:new-hello /> <e:new-world />
    > <e:with/>
 -}
-with :: PolyExpansion m
+with :: PolyExpansion s
 with node = do
   exps <- expansions <$> getOndimS
   actions <-
@@ -156,7 +156,7 @@ with node = do
    >
    > <e:animal /> <!-- "not bound" error! -->
 -}
-scope :: PolyExpansion m
+scope :: PolyExpansion s
 scope node = do
   s <- getOndimS
   expandChildren node <* putOndimS s
@@ -170,7 +170,7 @@ scope node = do
    >   How are you doing?
    > </e:call>
 -}
-call :: PolyExpansion m
+call :: PolyExpansion s
 call node = do
   name <- getSingleAttr' "id" node
   callExpansion name node
@@ -184,7 +184,7 @@ call node = do
    >
    > <e:greet name="Joseph" />
 -}
-bind :: (HasCallStack) => PolyExpansion m
+bind :: (HasCallStack) => PolyExpansion s
 bind node = do
   attrs <- attributes node
   defSite <- getCurrentSite

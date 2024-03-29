@@ -7,7 +7,7 @@ import Ondim.Targets.HTML.Expansions (defaultState)
 import Ondim.Targets.HTML.Instances
 import Ondim.Targets.HTML.Parser (parseLBS)
 
-loadHtml :: Monad m => LoadConfig m
+loadHtml :: LoadConfig s
 loadHtml = LoadConfig {..}
   where
     initialState = defaultState

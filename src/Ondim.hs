@@ -27,7 +27,7 @@ able to specify expansions for a given type.
 So the main function in this module is probably 'expandNode', which when applied
 to a node runs the expansion machinery and turns the node into something else.
 
-Expansions are just Haskell functions of type @t -> 'Ondim' m [t]@, and can be
+Expansions are just Haskell functions of type @t -> 'Ondim' s [t]@, and can be
 defined inside Haskell code. The expansion's argument is the node whose name
 matched the name of the expansion (the "caller"), and the expansion returns a
 list of nodes that will replace it in the expansion process. Expansions are
@@ -54,7 +54,6 @@ For dealing with exceptions and debug data, see the module "Ondim.Debug".
 module Ondim
   ( -- * Monad
     Ondim,
-    runOndimWith,
     evalOndimWith,
     evalOndim,
 
@@ -86,6 +85,7 @@ module Ondim
     getTemplate,
     getNamespace,
     getText,
+
     -- ** Calling
     callExpansion,
     callTemplate,
@@ -101,7 +101,9 @@ module Ondim
   )
 where
 
+import Control.Monad.ST (ST)
 import Data.List qualified as L
+import Data.STRef (newSTRef)
 import Ondim.MultiWalk.Basic
 import Ondim.MultiWalk.Class
 import Ondim.MultiWalk.Core
@@ -110,30 +112,17 @@ import Prelude hiding (All)
 
 -- | Runs the Ondim action with a given initial state.
 evalOndimWith ::
-  (Monad m) =>
-  OndimState m ->
-  Ondim m a ->
-  m (Either OndimException a)
-evalOndimWith s o =
-  runExceptT $
-    unOndimT o
-      `runReaderT` initialTraceData
-      `evalStateT` s
-
--- | Runs the Ondim action with a given initial state, and also return the final state.
-runOndimWith ::
-  (Monad m) =>
-  OndimState m ->
-  Ondim m a ->
-  m (Either OndimException (a, OndimState m))
-runOndimWith s o =
-  runExceptT $
-    unOndimT o
-      `runReaderT` initialTraceData
-      `runStateT` s
+  OndimState s ->
+  Ondim s a ->
+  ST s (Either OndimException a)
+evalOndimWith s o = do
+  ref <- newSTRef s
+  unOndimT o
+    & usingReaderT (initialTraceData, ref)
+    & runExceptT
 
 -- | Runs the Ondim action with empty initial state.
-evalOndim :: (Monad m) => Ondim m a -> m (Either OndimException a)
+evalOndim :: Ondim s a -> ST s (Either OndimException a)
 evalOndim = evalOndimWith mempty
 
 -- Children
@@ -144,33 +133,26 @@ evalOndim = evalOndimWith mempty
 'expandChildren' = 'expandNodes' . 'children'
 @
 -}
-expandChildren ::
-  forall t m.
-  (OndimNode t, Monad m) =>
-  Expansion m t
+expandChildren :: (OndimNode t) => Expansion s t
 expandChildren = expandNodes . children
 
 -- Attributes
 
 -- | Lookup an attribute from a node by name.
-lookupAttr ::
-  (Monad m, OndimNode t) =>
-  Text ->
-  t ->
-  Ondim m (Maybe Text)
+lookupAttr :: (OndimNode t) => Text -> t -> Ondim s (Maybe Text)
 lookupAttr key = fmap (L.lookup key) . attributes
 
 -- | Render node as bytestring, if possible, or fail.
-renderNodeOrError :: (HasCallStack, Monad m) => (OndimNode a) => a -> Ondim m LByteString
+renderNodeOrError :: (HasCallStack) => (OndimNode a) => a -> Ondim s LByteString
 renderNodeOrError =
   case renderNode of
     Just render -> return . render
     Nothing -> const $ throwTemplateError "This type cannot be rendered."
 
 -- | Expand and then render template called 'name' to bytestring.
-renderTemplateOrError :: (HasCallStack, Monad m) => Text -> Ondim m LByteString
+renderTemplateOrError :: (HasCallStack) => Text -> Ondim s LByteString
 renderTemplateOrError name = do
-  mbValue <- Ondim $ gets (lookup name . expansions)
+  mbValue <- lookup name . expansions <$> getOndimS
   case mbValue of
     Just (TemplateData site thing) ->
       renderNodeOrError
@@ -179,19 +161,19 @@ renderTemplateOrError name = do
     Nothing -> throwExpFailure @() name NotBound
 
 -- | Either applies template 'name', or throws a failure if it does not exist.
-callTemplate :: forall t m. (OndimNode t, Monad m) => Text -> Ondim m [t]
+callTemplate :: forall t s. (OndimNode t) => Text -> Ondim s [t]
 callTemplate name = do
   exps <- getTemplate name
   either (throwExpFailure @t name) return exps
 
 -- | Either applies text 'name', or throws a failure if it does not exist.
-callText :: (Monad m) => Text -> Ondim m Text
+callText :: Text -> Ondim s Text
 callText name = do
   exps <- getText name
   either (throwExpFailure @Text name) return exps
 
 -- | Either applies expansion 'name', or throws a failure if it does not exist.
-callExpansion :: forall t m. (OndimNode t, Monad m) => Text -> Expansion m t
+callExpansion :: forall t s. (OndimNode t) => Text -> Expansion s t
 callExpansion name arg = do
   exps <- getExpansion name
   either (throwExpFailure @t name) ($ arg) exps

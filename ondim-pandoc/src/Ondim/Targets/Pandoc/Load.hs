@@ -11,7 +11,7 @@ import Text.Pandoc.Extensions (Extension (..), disableExtensions, extensionsFrom
 import Text.Pandoc.Options (def, readerExtensions)
 import Text.Pandoc.Readers.Markdown (readMarkdown)
 
-loadPandocMd :: Monad m => LoadConfig m
+loadPandocMd :: LoadConfig s
 loadPandocMd = LoadConfig {..}
   where
     patterns = ["**/*.md"]

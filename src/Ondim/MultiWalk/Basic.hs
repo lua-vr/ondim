@@ -7,11 +7,14 @@
 module Ondim.MultiWalk.Basic where
 
 import Control.Monad.Except (MonadError (..))
+import Control.Monad.ST
 import Control.MultiWalk.HasSub qualified as HS
 import Data.HashMap.Strict qualified as Map
+import Data.STRef
 import Data.Text qualified as T
 import GHC.Exception (SrcLoc)
 import GHC.Exts qualified as GHC
+import GHC.IO (ioToST)
 import {-# SOURCE #-} Ondim.MultiWalk.Class
 import {-# SOURCE #-} Ondim.MultiWalk.Combinators (Carrier)
 import System.FilePath (takeExtensions)
@@ -19,34 +22,20 @@ import Type.Reflection (SomeTypeRep, someTypeRep)
 
 -- * Monad
 
-newtype Ondim m a = Ondim
+newtype Ondim s a = Ondim
   { unOndimT ::
       ReaderT
-        TraceData
-        (StateT (OndimState m) (ExceptT OndimException m))
+        (TraceData, STRef s (OndimState s))
+        (ExceptT OndimException (ST s))
         a
   }
-  deriving newtype (Functor, Applicative, Monad, MonadIO)
+  deriving newtype (Functor, Applicative, Monad)
 
-instance MonadTrans Ondim where
-  lift = Ondim . lift . lift . lift
+liftST :: ST s a -> Ondim s a
+liftST = Ondim . lift . lift
 
-instance (MonadState s m) => MonadState s (Ondim m) where
-  get = lift get
-  put x = lift (put x)
-
-instance (MonadReader s m) => MonadReader s (Ondim m) where
-  ask = lift ask
-  local f (Ondim (ReaderT g)) = Ondim $ ReaderT $ local f . g
-
-instance (MonadError e m) => MonadError e (Ondim m) where
-  throwError = lift . throwError
-  catchError (x :: Ondim m a) c =
-    let f :: TraceData -> OndimState m -> m (Either OndimException (a, OndimState m))
-        f r s =
-          let c' e = coerce (c e) r s
-           in coerce x r s `catchError` c'
-     in coerce f
+instance MonadIO (Ondim RealWorld) where
+  liftIO m = liftST $ ioToST m
 
 -- * Filters and Expansions
 
@@ -69,7 +58,7 @@ callStackSite = case GHC.toList callStack of
 -- Expansions
 
 -- | An expansion.
-type Expansion m t = t -> Ondim m [t]
+type Expansion s t = t -> Ondim s [t]
 
 {- | A namespace. Internally represented as a hashmap from 'Text' keys to
    @'NamespaceItem' m@ values.
@@ -78,7 +67,7 @@ newtype Namespace m = Namespace {hashmap :: HashMap Text (NamespaceItem m)}
   deriving (Generic)
 
 -- | An expansion that is polymorphic on the type.
-type PolyExpansion m = forall a. (OndimNode a, Monad m) => Expansion m a
+type PolyExpansion s = forall a. (OndimNode a) => Expansion s a
 
 {- | An opaque datatype that should be regarded as a sum of four possible types:
 
@@ -95,27 +84,27 @@ type PolyExpansion m = forall a. (OndimNode a, Monad m) => Expansion m a
   4. Namespaces, i.e., nested namespaces. (use the 'Ondim.State.namespace'
   constructor).
 -}
-data NamespaceItem m where
-  TypedExpansion :: Typeable a => DefinitionSite -> Expansion m a -> NamespaceItem m
-  PolyExpansion :: DefinitionSite -> PolyExpansion m -> NamespaceItem m
-  TemplateData :: (OndimNode a) => DefinitionSite -> a -> NamespaceItem m
-  NamespaceData :: Namespace m -> NamespaceItem m
+data NamespaceItem s where
+  TypedExpansion :: (Typeable a) => DefinitionSite -> Expansion s a -> NamespaceItem s
+  PolyExpansion :: DefinitionSite -> PolyExpansion s -> NamespaceItem s
+  TemplateData :: (OndimNode a) => DefinitionSite -> a -> NamespaceItem s
+  NamespaceData :: Namespace s -> NamespaceItem s
 
-instance Semigroup (Namespace m) where
+instance Semigroup (Namespace s) where
   (Namespace x) <> (Namespace y) = Namespace $ Map.unionWith f x y
     where
       f (NamespaceData n) (NamespaceData m) = NamespaceData $ n <> m
       f z _ = z
 
-instance Monoid (Namespace m) where
+instance Monoid (Namespace s) where
   mempty = Namespace mempty
 
 -- * State data
 
 -- | Ondim's expansion state
-newtype OndimState (m :: Type -> Type) = OndimState
+newtype OndimState (s :: Type) = OndimState
   { -- | Named expansions
-    expansions :: Namespace m
+    expansions :: Namespace s
   }
   deriving (Generic)
   deriving newtype (Semigroup, Monoid)
@@ -134,27 +123,27 @@ data TraceData = TraceData
 initialTraceData :: TraceData
 initialTraceData = TraceData 0 [] NoDefinition False
 
-getCurrentSite :: (Monad m) => Ondim m DefinitionSite
-getCurrentSite = Ondim $ asks currentSite
+getCurrentSite :: Ondim s DefinitionSite
+getCurrentSite = Ondim $ asks (currentSite . fst)
 
-withSite :: (Monad m) => DefinitionSite -> Ondim m a -> Ondim m a
-withSite site = Ondim . local (\s -> s {currentSite = site}) . unOndimT
+withSite :: DefinitionSite -> Ondim s a -> Ondim s a
+withSite site = Ondim . local (first \s -> s {currentSite = site}) . unOndimT
 
 data ExceptionType
   = MaxExpansionDepthExceeded
   | -- | Template errors are not meant to be catched from within the templates.
     -- Instead, they point at user errors that are supposed to be fixed.
     TemplateError
+      -- | Call stack
       CallStack
-      -- ^ Call stack
+      -- | Custom error message.
       Text
-      -- ^ Custom error message.
   | -- | Failures are expected in some sense.
     Failure
+      -- | Type representation of the node which triggered the failure.
       SomeTypeRep
-      -- ^ Type representation of the node which triggered the failure.
+      -- | Identifier of the node which triggered the failure.
       Text
-      -- ^ Identifier of the node which triggered the failure.
       OndimFailure
   deriving (Show, Exception)
 
@@ -164,12 +153,12 @@ data OndimFailure
     NotBound
   | -- | Expansion bound under identifier has mismatched type.
     ExpansionWrongType
+      -- | Type representation of the expansion that is bound under the identifier.
       SomeTypeRep
-      -- ^ Type representation of the expansion that is bound under the identifier.
   | -- | Expansion bound under identifier has mismatched type.
     TemplateWrongType
+      -- | Type representation of the expansion that is bound under the identifier.
       SomeTypeRep
-      -- ^ Type representation of the expansion that is bound under the identifier.
   | -- | Custom failure.
     FailureOther Text
   deriving (Show, Exception)
@@ -182,48 +171,46 @@ data OndimException = OndimException ExceptionType TraceData
 throw an error and instead treat it as if it had no identifier, i.e., it will
 ignore it and recurse into the substructures.
 -}
-withoutNBErrors :: (Monad m) => Ondim m a -> Ondim m a
-withoutNBErrors = Ondim . local f . unOndimT
+withoutNBErrors :: Ondim s a -> Ondim s a
+withoutNBErrors = Ondim . local (first f) . unOndimT
   where
     f r = r {inhibitErrors = True}
 
 -- | Run subcomputation with "not bound" errors.
-withNBErrors :: (Monad m) => Ondim m a -> Ondim m a
-withNBErrors = Ondim . local f . unOndimT
+withNBErrors :: Ondim s a -> Ondim s a
+withNBErrors = Ondim . local (first f) . unOndimT
   where
     f r = r {inhibitErrors = False}
 
 catchException ::
-  (Monad m) =>
-  Ondim m a ->
-  (OndimException -> Ondim m a) ->
-  Ondim m a
+  Ondim s a ->
+  (OndimException -> Ondim s a) ->
+  Ondim s a
 catchException (Ondim m) f = Ondim $ catchError m (unOndimT . f)
 
-throwException :: (Monad m) => ExceptionType -> Ondim m a
+throwException :: ExceptionType -> Ondim s a
 throwException e = do
-  td <- Ondim ask
+  td <- Ondim (asks fst)
   Ondim $ throwError (OndimException e td)
 
-throwTemplateError :: (HasCallStack, Monad m) => Text -> Ondim m a
+throwTemplateError :: (HasCallStack) => Text -> Ondim s a
 throwTemplateError t = throwException (TemplateError callStack t)
 
 catchFailure ::
-  (Monad m) =>
-  Ondim m a ->
-  (OndimFailure -> Text -> SomeTypeRep -> TraceData -> Ondim m a) ->
-  Ondim m a
+  Ondim s a ->
+  (OndimFailure -> Text -> SomeTypeRep -> TraceData -> Ondim s a) ->
+  Ondim s a
 catchFailure (Ondim m) f = Ondim $ catchError m \(OndimException exc tdata) ->
   case exc of
     Failure trep name e -> unOndimT $ f e name trep tdata
     _other -> m
 
 throwExpFailure ::
-  forall t m a.
-  (Monad m, Typeable t) =>
+  forall t s a.
+  (Typeable t) =>
   Text ->
   OndimFailure ->
-  Ondim m a
+  Ondim s a
 throwExpFailure t f =
   throwException $ Failure (someTypeRep (Proxy @t)) t f
 

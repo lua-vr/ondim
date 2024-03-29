@@ -7,10 +7,10 @@ import Ondim
 import Ondim.Debug
 
 lookupAttr' ::
-  (Monad m, OndimNode t) =>
+  (OndimNode t) =>
   Text ->
   t ->
-  Ondim m Text
+  Ondim s Text
 lookupAttr' key node =
   maybe (throwTemplateError $ "Missing '" <> key <> "' argument.") pure
     =<< lookupAttr key node
@@ -19,10 +19,10 @@ getSingleAttr :: Text -> [Attribute] -> Maybe Text
 getSingleAttr name attrs = L.lookup name attrs <|> viaNonEmpty (fst . head) attrs
 
 getSingleAttr' ::
-  (Monad m, OndimNode t) =>
+  (OndimNode t) =>
   Text ->
   t ->
-  Ondim m Text
+  Ondim s Text
 getSingleAttr' name node =
   maybe (throwTemplateError $ "Missing '" <> name <> "' argument") pure
     . getSingleAttr name
@@ -34,10 +34,9 @@ identifiesAs n = (Just n ==) . identify
 -- * Lists
 
 listExp ::
-  (Monad m) =>
-  (a -> NamespaceItem m) ->
+  (a -> NamespaceItem s) ->
   [a] ->
-  NamespaceMap m
+  NamespaceMap s
 listExp f list = do
   "size" #@ show $ length list
   unless (null list) $ "nonempty" #@ "true"
@@ -45,11 +44,11 @@ listExp f list = do
   whenJust (viaNonEmpty head list) (("head" #:) . f)
 
 listList ::
-  forall a m t.
-  (OndimNode t, Monad m) =>
-  (a -> NamespaceItem m) ->
+  forall a t s.
+  (OndimNode t) =>
+  (a -> NamespaceItem s) ->
   [a] ->
-  Expansion m t
+  Expansion s t
 listList f list node = do
   alias <- fromMaybe "this" <$> lookupAttr "as" node
   expansion <- do
@@ -72,10 +71,9 @@ listList f list node = do
 -- * Assocs and maps
 
 assocsExp ::
-  (Monad m) =>
-  (v -> NamespaceItem m) ->
+  (v -> NamespaceItem s) ->
   [(Text, v)] ->
-  NamespaceMap m
+  NamespaceMap s
 assocsExp vf obj = do
   "size" #@ show $ length obj
   unless (null obj) $ "nonempty" #@ "true"
@@ -90,19 +88,17 @@ assocsExp vf obj = do
         "value" #: vf v
 
 mapExp ::
-  (Monad m) =>
-  (v -> NamespaceItem m) ->
+  (v -> NamespaceItem s) ->
   Map Text v ->
-  NamespaceMap m
+  NamespaceMap s
 mapExp vf obj = assocsExp vf (Map.toList obj)
 
 -- * Booleans
 
 ifElse ::
-  forall t m.
-  (OndimNode t, Monad m) =>
+  (OndimNode t) =>
   Bool ->
-  Expansion m t
+  Expansion s t
 ifElse cond node = do
   let els = children node
       yes = filter (not . identifiesAs "else") els
@@ -117,10 +113,9 @@ ifElse cond node = do
 -- * Text
 
 switchWithDefault ::
-  forall m t.
-  (OndimNode t, Monad m) =>
+  (OndimNode t) =>
   Maybe Text ->
-  Expansion m t
+  Expansion s t
 switchWithDefault tag node = do
   let els = children node
   match <- (`findM` els) \x -> do
@@ -136,14 +131,13 @@ switchWithDefault tag node = do
     findM p = foldr (\x -> ifM (p x) (pure $ Just x)) (pure Nothing)
 
 renderExp ::
-  forall m a b.
+  forall a b s.
   ( HasCallStack,
     OndimNode a,
-    OndimNode b,
-    Monad m
+    OndimNode b
   ) =>
   (Text -> Either String b) ->
-  Expansion m a
+  Expansion s a
 renderExp f node = do
   parsed <- f <$> lookupAttr' "text" node
   either (throwTemplateError . toText) convert parsed

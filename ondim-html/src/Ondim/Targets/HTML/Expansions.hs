@@ -8,7 +8,7 @@ import Ondim.Targets.HTML.Instances
 import Ondim.Targets.HTML.Parser (parseT)
 import Text.XML qualified as X
 
-defaultState :: (Monad m) => OndimState m
+defaultState :: OndimState s
 defaultState =
   OndimState
     { expansions = exps

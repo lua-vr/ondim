@@ -11,10 +11,10 @@ import Ondim
 import Ondim.Debug
 import Ondim.Extra.Expansions (listExp)
 
-tryExp :: (Monad m) => PolyExpansion m
+tryExp :: PolyExpansion s
 tryExp node = expandChildren node `catchFailure` \_ _ _ _ -> return []
 
-exceptionExp :: (Monad m) => OndimException -> NamespaceMap m
+exceptionExp :: OndimException -> NamespaceMap s
 exceptionExp exc@(OndimException e t) = do
   "pretty" #@ prettyException exc
   "stack" #. listExp stackExp (expansionTrace t)

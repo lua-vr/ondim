@@ -95,12 +95,11 @@ instance (KnownConfig c) => Expansible (LiftSAttrsWithTry' c) where
         | otherwise = expandNode x
 
 getSAttributes ::
-  forall c m t.
+  forall c s t.
   ( KnownConfig c,
-    Monad m,
     AllMods (Substructure (SAttrData c)) (ExpTypes t),
     OndimNode t
   ) =>
   t ->
-  Ondim m [(Text, Text)]
+  Ondim s [(Text, Text)]
 getSAttributes = fmap coerce . expandNodes . getSubstructure @(SAttrData c)
