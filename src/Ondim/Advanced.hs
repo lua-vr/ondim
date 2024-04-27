@@ -3,18 +3,8 @@
    ones.
 -}
 module Ondim.Advanced
-  ( OndimNode (..),
+    ( OndimNode (..),
+      Expansible (..),
+    ) where
 
-    -- * Combinators
-    module Ondim.MultiWalk.Combinators,
-
-    expandSpecList,
-
-    -- * Substructures
-    module Ondim.MultiWalk.Substructure,
-  ) where
-
-import Ondim.MultiWalk.Class (OndimNode (..))
-import Ondim.MultiWalk.Combinators
-import Ondim.MultiWalk.Substructure
-import Ondim.MultiWalk.Core (expandSpecList)
+import Ondim.Internal.Class (OndimNode (..), Expansible (..))

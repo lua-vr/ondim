@@ -54,8 +54,8 @@ where
 import Data.Char (isLetter)
 import Data.HashMap.Strict qualified as HMap
 import Data.Text qualified as T
-import Ondim.MultiWalk.Basic
-import Ondim.MultiWalk.Class (OndimNode)
+import Ondim.Internal.Basic
+import Ondim.Internal.Class (OndimNode)
 import Data.STRef (readSTRef, modifySTRef', writeSTRef)
 
 -- * User API

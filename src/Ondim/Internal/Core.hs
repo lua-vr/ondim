@@ -1,27 +1,33 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module Ondim.MultiWalk.Core
+module Ondim.Internal.Core
   ( expandNode,
-    expandNodes,
-    expandSubstructures,
-    expandSpecList,
+    expandSubs,
     getExpansion,
     getTemplate,
     getNamespace,
     getText,
+
+    -- Exceptions
+    withoutNBErrors,
+    withNBErrors,
+    catchException,
+    throwException,
+    throwTemplateError,
+    catchFailure,
+    throwExpFailure,
   ) where
 
-import Control.MultiWalk.HasSub (AllMods, GSubTag)
-import Control.MultiWalk.HasSub qualified as HS
 import Data.Bitraversable (bimapM)
 import Data.HashMap.Strict qualified as HMap
 import Data.Typeable (eqT, (:~:) (..))
-import Ondim.MultiWalk.Basic
-import Ondim.MultiWalk.Class
+import Ondim.Internal.Basic
+import Ondim.Internal.Class
 import Ondim.State
 import Type.Reflection (SomeTypeRep, someTypeRep)
 import Prelude hiding (All)
+import Control.Monad.Except (MonadError(..))
 
 -- Get stuff from state
 
@@ -36,7 +42,7 @@ fromTemplate site value
   | Just cast <- ondimCast = Right $ cast <$> lifted
   | otherwise = Left $ TemplateWrongType (someTypeRep (Proxy @b))
   where
-    lifted = withSite site (expandSubstructures value)
+    lifted = withSite site (expandSubs value)
 
 templateToExpansion ::
   forall s t.
@@ -86,7 +92,7 @@ getText name = do
   case mbValue of
     Just (TemplateData @t site thing)
       | Just Refl <- eqT' @Text @t -> return $ Right thing
-      | Just cast <- nodeAsText -> Right . cast <$> withSite site (expandSubstructures thing)
+      | Just cast <- nodeAsText -> Right . cast <$> withSite site (expandSubs thing)
       | otherwise -> return $ Left $ TemplateWrongType (typeRep' @t)
     -- bimapM return id $ fromTemplate site thing
     Just _ -> return $ Left (FailureOther "Identifier not bound to a template.")
@@ -144,7 +150,7 @@ expCtx name site (Ondim ctx) = do
           )
           ctx
 
--- * Lifiting
+-- * Expansion
 
 {- | This function recursively expands the node and its substructures according to
    the expansions that are bound in the context.
@@ -166,32 +172,73 @@ expandNode node = do
           | otherwise -> throwExpFailure @t name e
     Nothing -> continue
   where
-    continue = one <$> expandSubstructures node
+    continue = one <$> expandSubs node
 {-# INLINEABLE expandNode #-}
 
--- | Expand a list of nodes and concatenate results.
-expandNodes ::
-  forall t s.
-  (OndimNode t) =>
-  [t] ->
-  Ondim s [t]
-expandNodes = expandSpec @(NodeListSpec t)
-{-# INLINEABLE expandNodes #-}
-
--- | Expand only the substructures of a node.
-expandSubstructures :: forall t s. (OndimNode t) => t -> Ondim s t
-expandSubstructures = expandSpecList @(ExpTypes t)
-{-# INLINEABLE expandSubstructures #-}
-
--- * Lifting functions
-
--- | Expand a list of nodes according to a spec list.
-expandSpecList ::
-  forall ls t s.
-  ( HasSub GSubTag ls t,
-    AllMods Expansible ls
+instance
+  {-# OVERLAPPABLE #-}
+  ( OndimNode t
   ) =>
-  t ->
-  Ondim s t
-expandSpecList = HS.modSub @OCTag @GSubTag @ls @t (Proxy @Expansible) (\(_ :: Proxy r) -> expandSpec @r)
-{-# INLINEABLE expandSpecList #-}
+  Expansible [t]
+  where
+  expandSubs = foldMapM expandNode
+  {-# INLINEABLE expandSubs #-}
+
+instance
+  {-# OVERLAPPABLE #-}
+  ( OndimNode t
+  ) =>
+  Expansible (Seq t)
+  where
+  expandSubs = foldMapM (fmap fromList . expandNode)
+  {-# INLINEABLE expandSubs #-}
+
+-- * Exceptions
+
+{- | Run subcomputation without (most) "not bound" errors. More specifically, if
+'Ondim.expandNode' finds a node whose identifier is not bound, it will not
+throw an error and instead treat it as if it had no identifier, i.e., it will
+ignore it and recurse into the substructures.
+-}
+withoutNBErrors :: Ondim s a -> Ondim s a
+withoutNBErrors = Ondim . local (first f) . unOndimT
+  where
+    f r = r {inhibitErrors = True}
+
+-- | Run subcomputation with "not bound" errors.
+withNBErrors :: Ondim s a -> Ondim s a
+withNBErrors = Ondim . local (first f) . unOndimT
+  where
+    f r = r {inhibitErrors = False}
+
+catchException ::
+  Ondim s a ->
+  (OndimException -> Ondim s a) ->
+  Ondim s a
+catchException (Ondim m) f = Ondim $ catchError m (unOndimT . f)
+
+throwException :: ExceptionType -> Ondim s a
+throwException e = do
+  td <- Ondim (asks fst)
+  Ondim $ throwError (OndimException e td)
+
+throwTemplateError :: (HasCallStack) => Text -> Ondim s a
+throwTemplateError t = throwException (TemplateError callStack t)
+
+catchFailure ::
+  Ondim s a ->
+  (OndimFailure -> Text -> SomeTypeRep -> TraceData -> Ondim s a) ->
+  Ondim s a
+catchFailure (Ondim m) f = Ondim $ catchError m \(OndimException exc tdata) ->
+  case exc of
+    Failure trep name e -> unOndimT $ f e name trep tdata
+    _other -> m
+
+throwExpFailure ::
+  forall t s a.
+  (Typeable t) =>
+  Text ->
+  OndimFailure ->
+  Ondim s a
+throwExpFailure t f =
+  throwException $ Failure (someTypeRep (Proxy @t)) t f

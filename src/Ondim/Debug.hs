@@ -24,4 +24,5 @@ module Ondim.Debug
       callStackSite,
     ) where
 
-import Ondim.MultiWalk.Basic
+import Ondim.Internal.Core
+import Ondim.Internal.Basic

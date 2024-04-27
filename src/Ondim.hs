@@ -70,8 +70,7 @@ module Ondim
 
     -- * Running templates
     expandNode,
-    expandNodes,
-    expandSubstructures,
+    expandSubs,
 
     -- * Data types
     Expansion,
@@ -104,9 +103,9 @@ where
 import Control.Monad.ST (ST)
 import Data.List qualified as L
 import Data.STRef (newSTRef)
-import Ondim.MultiWalk.Basic
-import Ondim.MultiWalk.Class
-import Ondim.MultiWalk.Core
+import Ondim.Internal.Basic
+import Ondim.Internal.Class
+import Ondim.Internal.Core
 import Ondim.State
 import Prelude hiding (All)
 
@@ -134,7 +133,7 @@ evalOndim = evalOndimWith mempty
 @
 -}
 expandChildren :: (OndimNode t) => Expansion s t
-expandChildren = expandNodes . children
+expandChildren = expandSubs . children
 
 -- Attributes
 
@@ -156,7 +155,7 @@ renderTemplateOrError name = do
   case mbValue of
     Just (TemplateData site thing) ->
       renderNodeOrError
-        =<< withSite site (expandSubstructures thing)
+        =<< withSite site (expandSubs thing)
     Just _ -> throwExpFailure @() name (FailureOther "Identifier not bound to a template.")
     Nothing -> throwExpFailure @() name NotBound
 

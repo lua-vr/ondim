@@ -4,21 +4,18 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Ondim.MultiWalk.Basic where
+module Ondim.Internal.Basic where
 
-import Control.Monad.Except (MonadError (..))
-import Control.Monad.ST
-import Control.MultiWalk.HasSub qualified as HS
+import Control.Monad.ST (RealWorld, ST)
 import Data.HashMap.Strict qualified as Map
-import Data.STRef
+import Data.STRef (STRef)
 import Data.Text qualified as T
 import GHC.Exception (SrcLoc)
 import GHC.Exts qualified as GHC
 import GHC.IO (ioToST)
-import {-# SOURCE #-} Ondim.MultiWalk.Class
-import {-# SOURCE #-} Ondim.MultiWalk.Combinators (Carrier)
+import Ondim.Internal.Class (OndimNode)
 import System.FilePath (takeExtensions)
-import Type.Reflection (SomeTypeRep, someTypeRep)
+import Type.Reflection (SomeTypeRep)
 
 -- * Monad
 
@@ -37,25 +34,7 @@ liftST = Ondim . lift . lift
 instance MonadIO (Ondim RealWorld) where
   liftIO m = liftST $ ioToST m
 
--- * Filters and Expansions
-
-data DefinitionSite
-  = CodeDefinition SrcLoc
-  | FileDefinition {definitionPath :: FilePath, definitionExt :: Text}
-  | NoDefinition
-  deriving (Eq, Show, Generic)
-
-fileSite :: FilePath -> DefinitionSite
-fileSite fp = FileDefinition fp exts
-  where
-    exts = T.drop 1 $ toText $ takeExtensions fp
-
-callStackSite :: DefinitionSite
-callStackSite = case GHC.toList callStack of
-  x : _ -> CodeDefinition (snd x)
-  [] -> NoDefinition
-
--- Expansions
+-- * Expansions
 
 -- | An expansion.
 type Expansion s t = t -> Ondim s [t]
@@ -113,15 +92,31 @@ newtype OndimState (s :: Type) = OndimState
 
 -- | Data used for debugging purposes
 data TraceData = TraceData
-  { depth :: Int,
-    expansionTrace :: [(Text, DefinitionSite)],
-    currentSite :: DefinitionSite,
-    inhibitErrors :: Bool
+  { depth :: !Int,
+    expansionTrace :: ![(Text, DefinitionSite)],
+    currentSite :: !DefinitionSite,
+    inhibitErrors :: !Bool
   }
   deriving (Eq, Show)
 
 initialTraceData :: TraceData
 initialTraceData = TraceData 0 [] NoDefinition False
+
+data DefinitionSite
+  = CodeDefinition !SrcLoc
+  | FileDefinition {definitionPath :: !FilePath, definitionExt :: !Text}
+  | NoDefinition
+  deriving (Eq, Show, Generic)
+
+fileSite :: FilePath -> DefinitionSite
+fileSite fp = FileDefinition fp exts
+  where
+    exts = T.drop 1 $ toText $ takeExtensions fp
+
+callStackSite :: DefinitionSite
+callStackSite = case GHC.toList callStack of
+  x : _ -> CodeDefinition (snd x)
+  [] -> NoDefinition
 
 getCurrentSite :: Ondim s DefinitionSite
 getCurrentSite = Ondim $ asks (currentSite . fst)
@@ -135,16 +130,16 @@ data ExceptionType
     -- Instead, they point at user errors that are supposed to be fixed.
     TemplateError
       -- | Call stack
-      CallStack
+      !CallStack
       -- | Custom error message.
-      Text
+      !Text
   | -- | Failures are expected in some sense.
     Failure
       -- | Type representation of the node which triggered the failure.
-      SomeTypeRep
+      !SomeTypeRep
       -- | Identifier of the node which triggered the failure.
-      Text
-      OndimFailure
+      !Text
+      !OndimFailure
   deriving (Show, Exception)
 
 -- | Failures related to the expansions.
@@ -154,76 +149,14 @@ data OndimFailure
   | -- | Expansion bound under identifier has mismatched type.
     ExpansionWrongType
       -- | Type representation of the expansion that is bound under the identifier.
-      SomeTypeRep
+      !SomeTypeRep
   | -- | Expansion bound under identifier has mismatched type.
     TemplateWrongType
       -- | Type representation of the expansion that is bound under the identifier.
-      SomeTypeRep
+      !SomeTypeRep
   | -- | Custom failure.
-    FailureOther Text
+    FailureOther !Text
   deriving (Show, Exception)
 
-data OndimException = OndimException ExceptionType TraceData
+data OndimException = OndimException !ExceptionType !TraceData
   deriving (Show, Exception)
-
-{- | Run subcomputation without (most) "not bound" errors. More specifically, if
-'Ondim.expandNode' finds a node whose identifier is not bound, it will not
-throw an error and instead treat it as if it had no identifier, i.e., it will
-ignore it and recurse into the substructures.
--}
-withoutNBErrors :: Ondim s a -> Ondim s a
-withoutNBErrors = Ondim . local (first f) . unOndimT
-  where
-    f r = r {inhibitErrors = True}
-
--- | Run subcomputation with "not bound" errors.
-withNBErrors :: Ondim s a -> Ondim s a
-withNBErrors = Ondim . local (first f) . unOndimT
-  where
-    f r = r {inhibitErrors = False}
-
-catchException ::
-  Ondim s a ->
-  (OndimException -> Ondim s a) ->
-  Ondim s a
-catchException (Ondim m) f = Ondim $ catchError m (unOndimT . f)
-
-throwException :: ExceptionType -> Ondim s a
-throwException e = do
-  td <- Ondim (asks fst)
-  Ondim $ throwError (OndimException e td)
-
-throwTemplateError :: (HasCallStack) => Text -> Ondim s a
-throwTemplateError t = throwException (TemplateError callStack t)
-
-catchFailure ::
-  Ondim s a ->
-  (OndimFailure -> Text -> SomeTypeRep -> TraceData -> Ondim s a) ->
-  Ondim s a
-catchFailure (Ondim m) f = Ondim $ catchError m \(OndimException exc tdata) ->
-  case exc of
-    Failure trep name e -> unOndimT $ f e name trep tdata
-    _other -> m
-
-throwExpFailure ::
-  forall t s a.
-  (Typeable t) =>
-  Text ->
-  OndimFailure ->
-  Ondim s a
-throwExpFailure t f =
-  throwException $ Failure (someTypeRep (Proxy @t)) t f
-
--- * Combinators
-
-data OCTag
-
-type HasSub tag ls t = HS.HasSub OCTag tag ls t
-type ToSpec a = HS.ToSpec OCTag a
-type ToSpecSel s a = HS.ToSpecSel OCTag s a
-type instance HS.Carrier OCTag a = Carrier a
-
--- * Attributes
-
--- | Alias for attributes
-type Attribute = (Text, Text)

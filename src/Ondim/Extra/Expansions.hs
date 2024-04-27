@@ -106,8 +106,8 @@ ifElse cond node = do
         maybe [] children $
           find (identifiesAs "else") els
   if cond
-    then expandNodes yes
-    else expandNodes no
+    then expandSubs yes
+    else expandSubs no
 {-# INLINEABLE ifElse #-}
 
 -- * Text
@@ -149,7 +149,7 @@ renderExp f node = do
         Just render ->
           case ondimCast of
             Just cast -> do
-              x' <- expandSubstructures x
+              x' <- expandSubs x
               let t = decodeUtf8 @Text (render x')
               return $ cast t
             Nothing -> noCast
