@@ -1,5 +1,4 @@
 packages: .
-          ondim-pandoc
 
 constraints:
   yaml >= 0.11.11,
