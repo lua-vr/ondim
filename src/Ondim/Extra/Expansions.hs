@@ -6,27 +6,36 @@ import Data.Map qualified as Map
 import Ondim
 import Ondim.Debug
 
+missingArgErr :: Text -> Ondim s a
+missingArgErr key = throwTemplateError $ "Missing '" <> key <> "' argument."
+
+ensureAttr ::
+  Text ->
+  [Attribute] ->
+  Ondim s Text
+ensureAttr key attrs = maybe (missingArgErr key) pure (L.lookup key attrs)
+
 lookupAttr' ::
   (OndimNode t) =>
   Text ->
   t ->
   Ondim s Text
-lookupAttr' key node =
-  maybe (throwTemplateError $ "Missing '" <> key <> "' argument.") pure
-    =<< lookupAttr key node
+lookupAttr' key node = ensureAttr key =<< attributes node
 
-getSingleAttr :: Text -> [Attribute] -> Maybe Text
-getSingleAttr name attrs = L.lookup name attrs <|> viaNonEmpty (fst . head) attrs
+ensureSingleAttr ::
+  Text ->
+  [Attribute] ->
+  Ondim s Text
+ensureSingleAttr key attrs =
+  maybe (missingArgErr key) pure $
+    L.lookup key attrs <|> viaNonEmpty (fst . head) attrs
 
-getSingleAttr' ::
+lookupSingleAttr' ::
   (OndimNode t) =>
   Text ->
   t ->
   Ondim s Text
-getSingleAttr' name node =
-  maybe (throwTemplateError $ "Missing '" <> name <> "' argument") pure
-    . getSingleAttr name
-    =<< attributes node
+lookupSingleAttr' key node = ensureSingleAttr key =<< attributes node
 
 identifiesAs :: (OndimNode t) => Text -> t -> Bool
 identifiesAs n = (Just n ==) . identify
@@ -121,7 +130,7 @@ switchWithDefault tag node = do
   match <- (`findM` els) \x -> do
     if identifiesAs "case" x
       then do
-        caseTag <- getSingleAttr' "id" x
+        caseTag <- lookupSingleAttr' "id" x
         return $ Just caseTag == tag
       else return False
   fromMaybe (pure []) do

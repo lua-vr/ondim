@@ -53,7 +53,7 @@ standardMap = do
 -}
 ifBound :: PolyExpansion s
 ifBound node = do
-  attrs <- T.split (== ',') <$> getSingleAttr' "id" node
+  attrs <- T.split (== ',') <$> lookupSingleAttr' "id" node
   bound <- allM exists attrs
   ifElse bound node
   where
@@ -92,7 +92,7 @@ anyBound node = do
 -}
 matchBound :: PolyExpansion s
 matchBound node = do
-  tag <- getSingleAttr' "id" node
+  tag <- lookupSingleAttr' "id" node
   tagC <- getText tag
   switchWithDefault (rightToMaybe tagC) node
 
@@ -116,7 +116,7 @@ ignore = const $ pure []
 -}
 open :: PolyExpansion s
 open node = do
-  name <- getSingleAttr' "id" node
+  name <- lookupSingleAttr' "id" node
   exps <- getNamespace name
   withoutExpansions [name] $
     case exps of
@@ -172,7 +172,7 @@ scope node = do
 -}
 call :: PolyExpansion s
 call node = do
-  name <- getSingleAttr' "id" node
+  name <- lookupSingleAttr' "id" node
   callExpansion name node
 
 {- | This expansion adds the content of the node's children to the state as a
@@ -193,8 +193,6 @@ bind node = do
     if strict
       then expandChildren node
       else return $ children node
-  case getSingleAttr "id" attrs of
-    Just name -> do
-      putSomeExpansion name . Just $ TemplateData defSite thing
-      pure []
-    Nothing -> throwTemplateError "No name for expansion"
+  name <- ensureSingleAttr "id" attrs
+  putSomeExpansion name . Just $ TemplateData defSite thing
+  pure []
