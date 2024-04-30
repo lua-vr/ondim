@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Ondim.Internal.Class
@@ -9,8 +8,8 @@ module Ondim.Internal.Class
     Attribute,
   ) where
 
-import Data.Typeable (eqT, (:~:) (..))
 import {-# SOURCE #-} Ondim.Internal.Basic (Ondim)
+import Data.Typeable ((:~:)(..), eqT)
 
 -- * Attributes
 
@@ -24,9 +23,8 @@ type Attribute = (Text, Text)
 class Expansible (t :: Type) where
   -- | Expand only the substructures of a node.
   expandSubs :: t -> Ondim s t
-  expandSubs = return
 
-class (Expansible t, OndimCast t) => OndimNode t where
+class (Typeable t, Expansible t) => OndimNode t where
   -- | Returns the name of the node as defined by the 'OndimNode' instance.
   identify :: t -> Maybe Text
   identify _ = Nothing
@@ -39,7 +37,7 @@ class (Expansible t, OndimCast t) => OndimNode t where
   children :: t -> [t]
   children _ = []
 
-  castFrom :: (Typeable a) => Maybe (a -> [t])
+  castFrom :: (OndimNode a) => Maybe (a -> [t])
   castFrom = Nothing
 
   -- | Converts the node to a 'LByteString' as defined by the 'OndimNode' instance.
@@ -49,31 +47,26 @@ class (Expansible t, OndimCast t) => OndimNode t where
   nodeAsText :: Maybe (t -> Text)
   nodeAsText = Nothing
 
-instance (OndimNode a, Expansible (t a), Foldable t, Typeable t) => OndimNode (t a) where
+instance {-# OVERLAPPABLE #-} (OndimNode a, Expansible (t a), Foldable t, Typeable t) => OndimNode (t a) where
   renderNode = foldMap' <$> renderNode
   nodeAsText = foldMap' <$> nodeAsText
 
 -- Some data instances (won't lift)
 
-instance (Expansible Text)
+instance (Expansible Text) where
+  expandSubs = return
 instance OndimNode Text where
   nodeAsText = Just id
 
-instance (Expansible LByteString)
+instance (Expansible LByteString) where
+  expandSubs = return
 instance OndimNode LByteString
 
-class (Typeable a) => OndimCast a where
-  ondimCast :: (OndimNode b) => Maybe (a -> [b])
+instance (Expansible Attribute) where
+  expandSubs = return
+instance OndimNode Attribute
 
-instance {-# OVERLAPPABLE #-} (Typeable a) => OndimCast a where
-  ondimCast :: forall b. (OndimNode b) => Maybe (a -> [b])
-  ondimCast = castFrom
-
-instance (OndimCast a, Typeable t, Foldable t) => OndimCast (t a) where
-  ondimCast :: forall b. (OndimNode b) => Maybe (t a -> [b])
-  ondimCast
-    | Just Refl <- eqT @b @a = Just toList
-    | otherwise = castFrom <|> foldMap' <$> ondimCast
-
--- ondimCast :: forall a b. (OndimNode a, OndimNode b) => Maybe (a -> [b])
--- ondimCast = castTo (Proxy @b) <|> castFrom (Proxy @a)
+ondimCast :: forall a b. (OndimNode a, OndimNode b) => Maybe (a -> [b])
+ondimCast = castFrom <|> case eqT @a @[b] of
+  Just Refl -> Just id
+  Nothing -> Nothing
