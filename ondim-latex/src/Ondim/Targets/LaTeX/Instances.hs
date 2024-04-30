@@ -1,5 +1,3 @@
-{-# LANGUAGE UndecidableInstances #-}
-
 module Ondim.Targets.LaTeX.Instances
   ( LaTeXNode (..)
   , LaTeXDoc (..)
