@@ -1,35 +1,38 @@
-cabal-version:      2.4
+cabal-version:      3.4
 name:               ondim
 version:            0.1.0.0
-
--- A short (one-line) description of the package.
--- synopsis:
-
--- A longer description of the package.
--- description:
-
--- A URL where users can report bugs.
--- bug-reports:
-
--- The license under which the package is released.
--- license:
 author:             Lucas V. R.
 maintainer:         @lucasvr:matrix.org
-
--- A copyright notice.
--- copyright:
--- category:
 extra-source-files: CHANGELOG.md
 
-library
-  -- Modules included in this executable, other than Main.
-  -- other-modules:
+common common
+  default-language:   GHC2021
+  ghc-options:        -Wall
+  build-depends:
+    , base    >=4.14 && <5
+    , relude
 
-  -- LANGUAGE extensions used by modules in this package.
+  mixins:
+    base hiding (Prelude),
+    relude (Relude as Prelude),
+    relude
+
+  default-extensions:
+    BlockArguments
+    DataKinds
+    DeriveAnyClass
+    DerivingStrategies
+    LambdaCase
+    OverloadedStrings
+    TypeFamilies
+    ViewPatterns
+
+library
+  import:          common
+  hs-source-dirs:  src
   exposed-modules:
     Ondim
     Ondim.Advanced
-    Ondim.Advanced.Substitution
     Ondim.Debug
     Ondim.Extra.Exceptions
     Ondim.Extra.Expansions
@@ -38,53 +41,105 @@ library
     Ondim.State
 
   other-modules:
-    Ondim.MultiWalk.Basic
-    Ondim.MultiWalk.Class
-    Ondim.MultiWalk.Combinators
-    Ondim.MultiWalk.Core
-    Ondim.MultiWalk.Substructure
+    Ondim.Internal.Basic
+    Ondim.Internal.Class
+    Ondim.Internal.Core
 
   build-depends:
-    , base                  >=4.14  && <5
     , containers            >=0.6.0 && <0.7
     , filepath
     , filepattern
     , monad-logger
     , mtl                   >=2.2.2 && <2.4
-    , multiwalk
-    , relude
     , text
-    , type-errors           >=0.2.0 && <0.3
     , unionmount
     , unliftio-core
     , unordered-containers
 
-  mixins:
-    base hiding (Prelude),
-    relude (Relude as Prelude),
-    relude
+library ondim-generic
+  import:          common
+  visibility:      public
+  hs-source-dirs:  ondim-generic/src
+  build-depends:
+    , multiwalk
+    , ondim
 
-  hs-source-dirs:     src
-  default-language:   Haskell2010
-  ghc-options:        -Wall -fprint-potential-instances
-  default-extensions:
-    BlockArguments
-    DataKinds
-    DeriveAnyClass
-    DeriveGeneric
-    DerivingStrategies
-    FlexibleContexts
-    FlexibleInstances
-    GeneralizedNewtypeDeriving
-    ImportQualifiedPost
-    KindSignatures
-    LambdaCase
-    MultiParamTypeClasses
-    OverloadedStrings
-    ScopedTypeVariables
-    StandaloneDeriving
-    TupleSections
-    TypeApplications
-    TypeFamilies
-    TypeOperators
-    ViewPatterns
+  exposed-modules: Ondim.Expansible.Generic
+
+library ondim-th
+  import:          common
+  visibility:      public
+  hs-source-dirs:  ondim-th/src
+  build-depends:
+    , ondim
+    , optics-core
+    , template-haskell
+    , template-haskell-optics
+
+  exposed-modules: Ondim.Expansible.TH
+  other-modules:   Ondim.Expansible.Test
+
+library ondim-whiskers
+  import:          common
+  visibility:      public
+  hs-source-dirs:  ondim-whiskers/src
+  build-depends:
+    , megaparsec
+    , ondim
+
+  other-modules:   Ondim.Targets.Whiskers.Parser
+  exposed-modules:
+    Ondim.Targets.Whiskers
+    Ondim.Targets.Whiskers.Expansions
+    Ondim.Targets.Whiskers.Instances
+    Ondim.Targets.Whiskers.Load
+
+library ondim-latex
+  import:          common
+  visibility:      public
+  hs-source-dirs:  ondim-latex/src
+  build-depends:
+    , megaparsec
+    , ondim
+
+  other-modules:   Ondim.Targets.LaTeX.Parser
+  exposed-modules:
+    Ondim.Targets.LaTeX
+    Ondim.Targets.LaTeX.Expansions
+    Ondim.Targets.LaTeX.Instances
+    Ondim.Targets.LaTeX.Load
+
+library ondim-json
+  import:          common
+  visibility:      public
+  hs-source-dirs:  ondim-json/src
+  build-depends:
+    , aeson
+    , ondim:{ondim, ondim-whiskers}
+    , scientific
+
+  exposed-modules:
+    Ondim.Extra.BindJSON
+    Ondim.Targets.Aeson
+    Ondim.Targets.Aeson.Expansions
+    Ondim.Targets.Aeson.Instances
+
+library ondim-html
+  import:          common
+  visibility:      public
+  hs-source-dirs:  ondim-html/src
+  build-depends:
+    , conduit
+    , containers
+    , html-conduit
+    , lucid
+    , ondim:{ondim, ondim-whiskers}
+    , xml-conduit                    >=1.9.0 && <1.10
+    , xml-types
+
+  exposed-modules:
+    Ondim.Targets.HTML
+    Ondim.Targets.HTML.Expansions
+    Ondim.Targets.HTML.Instances
+    Ondim.Targets.HTML.Load
+    Ondim.Targets.HTML.Parser
