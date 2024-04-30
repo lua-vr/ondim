@@ -4,23 +4,23 @@ module Ondim.Targets.LaTeX.Parser where
 import Data.Char (isAsciiLower, isAsciiUpper, isSpace, isUpper, toLower, isNumber)
 import Data.Sequence (Seq (..), (|>))
 import Data.Text qualified as T
-import Ondim.Targets.LaTeX.Instances (Node (..))
+import Ondim.Targets.LaTeX.Instances (LaTeXNode (..), LaTeXDoc (..))
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Prelude hiding (many, some)
 
-parseLaTeX :: String -> Text -> Either String [Node]
+parseLaTeX :: String -> Text -> Either String LaTeXDoc
 parseLaTeX fp =
   first errorBundlePretty
     . parse (runReaderT document initialParserstate) fp
 
-document :: Parser [Node]
+document :: Parser LaTeXDoc
 document = do
-  nodes <- manyNodes
+  Nodes nodes <- manyNodes
   eof
-  return $ toNodeList nodes
+  return $ LaTeXDoc (toList nodes)
 
-newtype Nodes = Nodes {unNodes :: Seq Node}
+newtype Nodes = Nodes {unNodes :: Seq LaTeXNode}
 
 instance Semigroup Nodes where
   (Nodes (xs :|> Text t1)) <> (Nodes (Text t2 :<| ys)) =
@@ -32,11 +32,8 @@ instance Monoid Nodes where
   mempty = Nodes mempty
 
 instance One Nodes where
-  type OneItem Nodes = Node
+  type OneItem Nodes = LaTeXNode
   one = Nodes . one
-
-toNodeList :: Nodes -> [Node]
-toNodeList = toList . unNodes
 
 newtype ParserState = ParserState
   { level :: Int
@@ -73,7 +70,7 @@ command = do
       char '['
     space
     pair `sepBy` char ',' <* char ']'
-  arg <- option [] do
+  arg <- option mempty do
     _ <- try do
       space
       char '{'
@@ -87,19 +84,19 @@ command = do
     inner =
       local
         (\s -> s {level = 1 + level s})
-        (toNodeList <$> manyNodes)
+        (toList . unNodes <$> manyNodes)
     isAllowedKey c = isAllowedName c || isNumber c || c == '.' || c == '-' || c == ':'
-    gpVal = char '{' *> (toNodeList <$> manyNodes) <* char '}'
+    gpVal = char '{' *> (unNodes <$> manyNodes) <* char '}'
     nVal = one . Text <$> takeWhile1P Nothing isAllowedKey
     pair = do
       space
       k <- try gpVal <|> nVal
       space
-      v <- option [] $ do
+      v <- option mempty $ do
         char '=' *> space
         (try gpVal <|> nVal)
           <* space
-      return (k, v)
+      return (toList k, toList v)
 
 lineEnd :: Parser Nodes
 lineEnd = do

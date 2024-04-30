@@ -1,9 +1,6 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Ondim.Targets.HTML.Instances where
 
-import Data.Char (isSpace)
+import Data.Bitraversable (bimapM)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import Data.Text qualified as T
@@ -13,54 +10,82 @@ import Lucid.Base qualified as L
 import Lucid.Html5 qualified as L
 import Ondim
 import Ondim.Advanced
-import Ondim.Advanced.Substitution (SAttr, SAttrs, SText, SubstConfig (..), getSAttributes)
+import Ondim.Targets.Whiskers (WAttribute, WNode (Textual), parseWhiskers, renderWhiskers)
 import Text.XML qualified as X
-
-type HSConfig = 'SubstConfig '$' '{' '}'
-type HtmlText = SText HSConfig
-type HtmlAttr = SAttr HSConfig
-type HtmlAttrs = SAttrs HSConfig
+import Data.Char (isSpace)
+import Data.Foldable (foldrM)
 
 newtype HtmlDocument = HtmlDocument {documentRoot :: HtmlElement}
   deriving (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
-toHtmlDocument :: X.Document -> HtmlDocument
-toHtmlDocument = HtmlDocument . toHtmlElement . X.documentRoot
+toHtmlDocument :: X.Document -> Either String HtmlDocument
+toHtmlDocument = fmap HtmlDocument . toHtmlElement . X.documentRoot
 
 instance L.ToHtml HtmlDocument where
   toHtml (HtmlDocument el) = L.doctype_ <> L.toHtml el
   toHtmlRaw = mempty
 
+instance Expansible HtmlDocument where
+  expandSubs (HtmlDocument e) = HtmlDocument <$> expandSubs e
+
 instance OndimNode HtmlDocument where
-  type ExpTypes HtmlDocument = 'SpecList '[ToSpec (Nesting HtmlElement)]
   renderNode = Just $ L.renderBS . L.toHtml
 
-{- | We use a new XML datatype so that we can group the node with the newline space
-  before it. This makes the output formatting much better.
--}
 data HtmlElement = HtmlElement
-  { preNewline :: Bool,
-    elementTag :: Text,
-    elementAttrs :: [Attribute],
+  { preNewline :: !Bool,
+    elementTag :: ![WNode],
+    elementAttrs :: ![WAttribute],
     elementChildren :: ![HtmlNode]
   }
   deriving (Eq, Ord, Show, Generic, NFData)
 
-toHtmlElement :: X.Element -> HtmlElement
+instance Expansible HtmlElement where
+  expandSubs (HtmlElement nl t a c) = HtmlElement nl t <$> expandSubs a <*> expandSubs c
+
+-- | Convert from XML nodes to @HtmlNode@
+toHtmlNodes :: [X.Node] -> Either String [HtmlNode]
+toHtmlNodes = foldrM go [] . filter notEmpty
+  where
+    notEmpty (X.NodeContent "") = False
+    notEmpty _ = True
+  
+    go (X.NodeContent t) []
+      | T.all isSpace t, T.any ('\n' ==) t = return []
+    go (X.NodeContent t) (Element el : xs)
+      | T.all isSpace t, T.any ('\n' ==) t = return $ Element el {preNewline = True} : xs
+    go (X.NodeContent t) (TextNode t' : xs) = do
+      p <- parse t
+      return $ TextNode (p <> t') : xs
+    go (X.NodeContent t) l = do
+      p <- parse t
+      return $ TextNode p : l
+    go (X.NodeElement el) xs = do
+      el' <- toHtmlElement el
+      return $ Element el' : xs
+    go X.NodeComment {} xs = return xs
+    go X.NodeInstruction {} xs = return xs
+    parse = parseWhiskers ("${", "}") ""
+
+toHtmlElement :: X.Element -> Either String HtmlElement
 toHtmlElement (X.Element name attrs nodes) =
-  HtmlElement False (X.nameLocalName name) (map (first X.nameLocalName) $ Map.toList attrs) $
-    toHtmlNodes nodes
+  HtmlElement False
+    <$> parse (X.nameLocalName name)
+    <*> mapM (bimapM (return . X.nameLocalName) parse) (Map.toList attrs)
+    <*> toHtmlNodes nodes
+  where
+    parse = parseWhiskers ("${", "}") ""
 
 voidElems :: Set.Set Text
 voidElems = Set.fromAscList $ T.words "area base br col command embed hr img input keygen link meta param source track wbr"
 
 instance L.ToHtml HtmlElement where
-  toHtml (HtmlElement nl name attrs child)
+  toHtml (HtmlElement nl (renderWhiskers -> name) attrs child)
     | nl = "\n" <> L.with elm attrs'
     | otherwise = L.with elm attrs'
     where
-      attrs' = map (uncurry L.makeAttribute) attrs
+      attrs' =
+        map (uncurry L.makeAttribute . fmap renderWhiskers) attrs
       childHtml =
         if name == "script" || name == "style"
           then L.toHtmlRaw child
@@ -72,61 +97,49 @@ instance L.ToHtml HtmlElement where
   toHtmlRaw = mempty
 
 instance OndimNode HtmlElement where
-  type ExpTypes HtmlElement = 'SpecList '[ToSpec HtmlAttrs, ToSpec (NL HtmlNode)]
   renderNode = Just $ L.renderBS . L.toHtml
 
 data HtmlNode
-  = Element HtmlElement
-  | TextNode Text
-  | RawNode Text
+  = Element !HtmlElement
+  | TextNode ![WNode]
+  | RawNode !Text
   deriving (Eq, Ord, Show, Generic, NFData)
 
 instance L.ToHtml HtmlNode where
   toHtml (Element el) = L.toHtml el
-  toHtml (TextNode t) = L.toHtml t
+  toHtml (TextNode t) = L.toHtml $ renderWhiskers t
   toHtml (RawNode t) = L.toHtmlRaw t
   toHtmlRaw Element {} = mempty
-  toHtmlRaw (TextNode t) = T.toHtmlRaw t
+  toHtmlRaw (TextNode t) = T.toHtmlRaw $ renderWhiskers t
   toHtmlRaw (RawNode t) = T.toHtmlRaw t
 
 instance L.ToHtml [HtmlNode] where
   toHtml = foldMap' L.toHtml
   toHtmlRaw = foldMap' L.toHtmlRaw
 
--- | Convert from XML nodes to @HtmlNode@
-toHtmlNodes :: [X.Node] -> [HtmlNode]
-toHtmlNodes = foldr go [] . filter notEmpty
-  where
-    notEmpty (X.NodeContent "") = False
-    notEmpty _ = True
-
-    go (X.NodeContent t) []
-      | T.all isSpace t, T.any ('\n' ==) t = []
-    go (X.NodeContent t) (Element el : xs)
-      | T.all isSpace t, T.any ('\n' ==) t = Element el {preNewline = True} : xs
-    go (X.NodeContent t) (TextNode t' : xs) = TextNode (t <> t') : xs
-    go (X.NodeContent t) l = TextNode t : l
-    go (X.NodeElement el) xs = Element (toHtmlElement el) : xs
-    go X.NodeComment {} xs = xs
-    go X.NodeInstruction {} xs = xs
+instance Expansible HtmlNode where
+  expandSubs = \case
+    Element e -> Element <$> expandSubs e
+    TextNode t -> TextNode <$> expandSubs t
+    n@RawNode {} -> return n
 
 instance OndimNode HtmlNode where
-  type
-    ExpTypes HtmlNode =
-      'SpecList
-        '[ ToSpec (Nesting HtmlElement),
-           ToSpecSel ('ConsSel "TextNode") HtmlText
-         ]
-  identify (Element (HtmlElement _ name _ _)) = T.stripPrefix "e:" name
+  identify (Element (HtmlElement _ (renderWhiskers -> name) _ _)) =
+    T.stripPrefix "e:" name
   identify _ = Nothing
-  children = getSubstructure
-  attributes = getSAttributes @HSConfig
-  castFrom (_ :: Proxy t)
-    | Just Refl <- eqT @t @Text = Just $ one . TextNode
+  children = \case
+    Element (HtmlElement {elementChildren = c}) -> c
+    _ -> []
+  attributes = \case
+    Element (HtmlElement {elementAttrs = attrs}) -> do
+      forM attrs \(k, v) -> do
+        v' <- expandSubs v
+        return (k, renderWhiskers v')
+    _ -> return []
+  castFrom :: forall t. (Typeable t) => Maybe (t -> [HtmlNode])
+  castFrom
+    | Just Refl <- eqT @t @Text = Just $ one . TextNode . one . Textual
     | Just Refl <- eqT @t @HtmlDocument = Just $ elementChildren . documentRoot
     | otherwise = Nothing
   nodeAsText = Just $ toStrict . L.renderText . L.toHtml
   renderNode = Just $ L.renderBS . L.toHtml
-
-rawNode :: Text -> HtmlNode
-rawNode = RawNode

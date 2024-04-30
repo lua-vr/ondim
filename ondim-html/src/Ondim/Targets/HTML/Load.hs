@@ -12,4 +12,4 @@ loadHtml = LoadConfig {..}
   where
     initialState = defaultState
     patterns = ["**/*.html"]
-    loadFn = loadFnSimple \_ bs -> Right $ toHtmlDocument (parseLBS bs)
+    loadFn = loadFnSimple \_ bs -> toHtmlDocument (parseLBS bs)

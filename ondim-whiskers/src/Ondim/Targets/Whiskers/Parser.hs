@@ -3,13 +3,13 @@ module Ondim.Targets.Whiskers.Parser (parseWhiskers) where
 import Data.Char (isAlphaNum, isSpace, isSymbol)
 import Data.Sequence (Seq (..), (|>))
 import Data.Text qualified as T
-import Ondim.Targets.Whiskers.Instances (Node (..))
+import Ondim.Targets.Whiskers.Instances (WNode (..))
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 import Prelude hiding (many, some)
 
-newtype Nodes = Nodes {unNodes :: Seq Node}
+newtype Nodes = Nodes {unNodes :: Seq WNode}
 
 instance Semigroup Nodes where
   (Nodes (xs :|> Textual t1)) <> (Nodes (Textual t2 :<| ys)) =
@@ -21,11 +21,8 @@ instance Monoid Nodes where
   mempty = Nodes mempty
 
 instance One Nodes where
-  type OneItem Nodes = Node
+  type OneItem Nodes = WNode
   one = Nodes . one
-
-toNodeList :: Nodes -> [Node]
-toNodeList = toList . unNodes
 
 data ParserState = ParserState
   { delimiters :: (Text, Text),
@@ -87,12 +84,12 @@ space' = do
   ws <- hwhitespace1
   modify \s -> s {whitespace = whitespace s <> ws}
 
-parseWhiskers :: (Text, Text) -> String -> Text -> Either String [Node]
+parseWhiskers :: (Text, Text) -> String -> Text -> Either String [WNode]
 parseWhiskers d fp =
   first errorBundlePretty
     . parse (evalStateT document initialParserstate {delimiters = d}) fp
 
-document :: Parser [Node]
+document :: Parser [WNode]
 document = do
   bolspace'
   Nodes nodes <- manyNodes
@@ -127,7 +124,7 @@ sectionStart = do
   (alone', level') <- gets (alone &&& level)
   space
   isSection <- parseBool $ char '#'
-  name <- takeWhileP (Just "node name") isAllowedName
+  name <- takeWhileP (Just "Wnode name") isAllowedName
   attributes <- option [] $ space1 *> (pair `sepBy1'` space1)
   space
   closeDelimiter
@@ -141,7 +138,7 @@ sectionStart = do
         Nodes
           ( Empty
               |> Textual ws
-              |> Section name attributes (toNodeList $ child <> end)
+              |> Section name attributes (toList $ unNodes $ child <> end)
           )
     else
       return $
@@ -155,7 +152,7 @@ sectionStart = do
     str =
       (char '"' *> (toText <$> manyTill L.charLiteral (char '"')))
         <|> takeWhile1P Nothing isAllowedName
-    pair = try $ liftA2 (,) str $ option "" $ try $ space *> char '=' *> space *> str
+    pair = try $ liftA2 (,) str $ option mempty $ try $ space *> char '=' *> space *> (toList . unNodes <$> manyNodes)
 
 isAllowedName :: Char -> Bool
 isAllowedName c =
