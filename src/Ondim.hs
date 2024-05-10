@@ -56,6 +56,7 @@ module Ondim
     Ondim,
     evalOndimWith,
     evalOndim,
+    liftST,
 
     -- * Nodes
     OndimNode,
