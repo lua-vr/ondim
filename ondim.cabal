@@ -56,28 +56,28 @@ library
     , unliftio-core
     , unordered-containers
 
-library ondim-generic
-  import:          common
-  visibility:      public
-  hs-source-dirs:  ondim-generic/src
-  build-depends:
-    , multiwalk
-    , ondim
+-- library ondim-generic
+--   import:          common
+--   visibility:      public
+--   hs-source-dirs:  ondim-generic/src
+--   build-depends:
+--     , multiwalk
+--     , ondim
 
-  exposed-modules: Ondim.Expansible.Generic
+--   exposed-modules: Ondim.Expansible.Generic
 
-library ondim-th
-  import:          common
-  visibility:      public
-  hs-source-dirs:  ondim-th/src
-  build-depends:
-    , ondim
-    , optics-core
-    , template-haskell
-    , template-haskell-optics
+-- library ondim-th
+--   import:          common
+--   visibility:      public
+--   hs-source-dirs:  ondim-th/src
+--   build-depends:
+--     , ondim
+--     , optics-core
+--     , template-haskell
+--     , template-haskell-optics
 
-  exposed-modules: Ondim.Expansible.TH
-  other-modules:   Ondim.Expansible.Test
+--   exposed-modules: Ondim.Expansible.TH
+--   other-modules:   Ondim.Expansible.Test
 
 library ondim-whiskers
   import:          common
