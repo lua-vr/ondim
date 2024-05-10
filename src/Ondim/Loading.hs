@@ -79,11 +79,12 @@ loadTemplatesDynamic ::
   (MonadLogger m, MonadIO m, MonadUnliftIO m) =>
   -- | Loading configurations
   [LoadConfig n] ->
-  -- | Places to look for templates, in descending order of priority.
-  [FilePath] ->
+  -- | Places to look for templates and their (optional) mount point,
+  -- in descending order of priority.
+  [(FilePath, Maybe FilePath)] ->
   m (OndimState n, (OndimState n -> m ()) -> m ())
 loadTemplatesDynamic cfgs places =
-  let sources = fromList (zip (zip [1 ..] places) places)
+  let sources = fromList (zip (zip [1 ..] (fst <$> places)) places)
       cfgMap = fromList $ [(i, f) | (i, loadFn -> f) <- zip [1 ..] cfgs]
       patts = [(i, p) | (i, patterns -> ps) <- zip [1 ..] cfgs, p <- ps]
       exclude = []
@@ -103,7 +104,7 @@ loadTemplatesDynamic cfgs places =
    in unionMount sources patts exclude initial handler
 
 -- | Load templates from a list of directories in descending order of priority.
-loadTemplates :: [LoadConfig n] -> [FilePath] -> IO (OndimState n)
+loadTemplates :: [LoadConfig n] -> [(FilePath, Maybe FilePath)] -> IO (OndimState n)
 loadTemplates cfgs dirs = fst <$> runNoLoggingT (loadTemplatesDynamic cfgs dirs)
 
 {- | Load templates in pure code from a list of filepaths and bytestrings. Meant
