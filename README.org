@@ -2,7 +2,7 @@
 
 #+html: <img src="https://upload.wikimedia.org/wikipedia/commons/0/0d/An_alphabet_of_celebrities_-_U.jpg" align="right" width="30%">
 
-Ondim is a library for creating templating engines for arbitrary formats, inspired by Heist (which only works for HTML). It also includes HTML, Pandoc, LaTeX and Whiskers (a new template language very similar to Mustache) targets that work out-of-the-box. 
+Ondim is a library for creating templating engines for arbitrary formats, inspired by Heist (which only works for HTML). It also includes HTML, LaTeX and Whiskers (a new template language very similar to Mustache) targets that work out-of-the-box. 
 
 The main idea is to reuse existing libraries that will provide the target  language's parser, types and renderer, and easily build an "expansion" layer on top. If you are familiar with Heist, for HTML this is done by binding /named expansions/ (in Heist they are called Splices) that programatically transform the contents of HTML elements whose tags match the name.
 
@@ -16,8 +16,8 @@ ifElse cond node = do
         maybe [] children $
           find ((Just "else" ==) . identify) els
   if cond
-    then liftNodes yes
-    else liftNodes no
+    then expandSubs yes
+    else expandSubs no
 #+end_src
 
 Now, suppose you have a variable ~isCat :: Bool~ and you want your templates to choose between two snippets depending on its value. Such HTML template could have type ~[HtmlNode]~, so that if you "lift" it into the Ondim monad binding ~ifElse isCat~ to the name ~if-cat~,
@@ -31,27 +31,32 @@ liftNodes myTemplateContent
 you can now write in your HTML templates...
 
 #+begin_src html
-<if-cat>
+<e:if-cat>
   <p>I have a <i>beautiful</i> cat!</p>
-  <else>
+  <e:else>
     <p>I don't have a cat 😭</p>
-  </else>
-</if-cat>
+  </e:else>
+</e:if-cat>
 #+end_src
 
 ...and the output will depend on the value of ~isCat~.
 
-The beauty of ondim (and one aspect that takes it further from Heist) is that the ~ifElse~ splice is polymorphic on the format type, so the same code works for formats other than HTML. In a Pandoc setting, the same code above would work if src_haskell{myTemplateContent} had type src_haskell{[Block]}, and the same template could be written as:
-#+begin_src markdown
-::: if-cat
-I have a _beautiful_ cat!
-
-:::: else
-I don't have a cat :sob:
-::::
-:::
+The beauty of ondim (and one aspect that takes it further from Heist) is that the ~ifElse~ splice is polymorphic on the format type, so the same code works for formats other than HTML. If you want to template JSON, the same code above would work if src_haskell{myTemplateContent} had type src_haskell{[Value]}, and a similar template could be written as:
+#+begin_src yaml
+- $: if-cat
+  $children:
+    - I have a beautiful cat!
+    - $: else
+      $children:
+        - I don't have a cat 😭
 #+end_src
-This is written in plain Pandoc markdown, and meant to be parsed by the Pandoc reader itself. Note that instead of HTML tags, now we annotate the expansions with [[https://pandoc.org/MANUAL.html#extension-fenced_divs][fenced divs]] and [[https://pandoc.org/MANUAL.html#extension-bracketed_spans][bracketed spans]].
 
-But HTML and Pandoc are just examples, each defined in very few lines of code under =Ondim.Targets.HTML= and =Ondim.Targets.Pandoc=. And due to the use of =multiwalk='s generics, most of it is instantiating generic instances. Ondim makes it easy to define your own!
-
+Or TeX:
+#+begin_src latex
+\@ifCat{
+  I have a \emph{beautiful} cat!
+  \@else{
+    I don't have a cat 😭
+  }
+}
+#+end_src
