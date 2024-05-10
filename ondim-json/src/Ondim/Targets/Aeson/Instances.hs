@@ -1,4 +1,10 @@
-module Ondim.Targets.Aeson.Instances where
+module Ondim.Targets.Aeson.Instances
+  ( AesonNode (..)
+  , nodeToValue
+  , nodeFromValue
+  , renderWhiskers
+  )
+  where
 
 import Data.Aeson
 import Data.Aeson.Key qualified as K
@@ -40,8 +46,6 @@ nodeFromValue = \case
   Number n -> return $ Number' n
   Bool b -> return $ Bool' b
   Null -> return Null'
-
-data ObjectLift
 
 instance Expansible AesonNode where
   expandSubs = \case
