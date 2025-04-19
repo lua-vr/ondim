@@ -1,21 +1,21 @@
-cabal-version:      3.4
-name:               ondim
-version:            0.1.0.0
-author:             Lucas V. R.
-maintainer:         @lucasvr:matrix.org
+cabal-version: 3.4
+name: ondim
+version: 0.1.0.0
+author: Lua V. R.
+maintainer: @luavr:matrix.org
 extra-source-files: CHANGELOG.md
 
 common common
-  default-language:   GHC2021
-  ghc-options:        -Wall
+  default-language: GHC2021
+  ghc-options: -Wall
   build-depends:
-    , base    >=4.14 && <5
-    , relude
+    base >=4.14 && <5,
+    relude,
 
   mixins:
     base hiding (Prelude),
     relude (Relude as Prelude),
-    relude
+    relude,
 
   default-extensions:
     BlockArguments
@@ -28,8 +28,8 @@ common common
     ViewPatterns
 
 library
-  import:          common
-  hs-source-dirs:  src
+  import: common
+  hs-source-dirs: src
   exposed-modules:
     Ondim
     Ondim.Advanced
@@ -46,15 +46,14 @@ library
     Ondim.Internal.Core
 
   build-depends:
-    , containers            >=0.6.0 && <0.7
-    , filepath
-    , filepattern
-    , monad-logger
-    , mtl                   >=2.2.2 && <2.4
-    , text
-    , unionmount
-    , unliftio-core
-    , unordered-containers
+    co-log-core,
+    containers >=0.6.0 && <0.7,
+    filepath,
+    filepattern,
+    mtl >=2.2.2 && <2.4,
+    text,
+    unionmount,
+    unordered-containers,
 
 -- library ondim-generic
 --   import:          common
@@ -63,9 +62,7 @@ library
 --   build-depends:
 --     , multiwalk
 --     , ondim
-
 --   exposed-modules: Ondim.Expansible.Generic
-
 -- library ondim-th
 --   import:          common
 --   visibility:      public
@@ -75,19 +72,17 @@ library
 --     , optics-core
 --     , template-haskell
 --     , template-haskell-optics
-
 --   exposed-modules: Ondim.Expansible.TH
 --   other-modules:   Ondim.Expansible.Test
-
 library ondim-whiskers
-  import:          common
-  visibility:      public
-  hs-source-dirs:  ondim-whiskers/src
+  import: common
+  visibility: public
+  hs-source-dirs: ondim-whiskers/src
   build-depends:
-    , megaparsec
-    , ondim
+    megaparsec,
+    ondim,
 
-  other-modules:   Ondim.Targets.Whiskers.Parser
+  other-modules: Ondim.Targets.Whiskers.Parser
   exposed-modules:
     Ondim.Targets.Whiskers
     Ondim.Targets.Whiskers.Expansions
@@ -95,14 +90,14 @@ library ondim-whiskers
     Ondim.Targets.Whiskers.Load
 
 library ondim-latex
-  import:          common
-  visibility:      public
-  hs-source-dirs:  ondim-latex/src
+  import: common
+  visibility: public
+  hs-source-dirs: ondim-latex/src
   build-depends:
-    , megaparsec
-    , ondim
+    megaparsec,
+    ondim,
 
-  other-modules:   Ondim.Targets.LaTeX.Parser
+  other-modules: Ondim.Targets.LaTeX.Parser
   exposed-modules:
     Ondim.Targets.LaTeX
     Ondim.Targets.LaTeX.Expansions
@@ -110,13 +105,13 @@ library ondim-latex
     Ondim.Targets.LaTeX.Load
 
 library ondim-json
-  import:          common
-  visibility:      public
-  hs-source-dirs:  ondim-json/src
+  import: common
+  visibility: public
+  hs-source-dirs: ondim-json/src
   build-depends:
-    , aeson
-    , ondim:{ondim, ondim-whiskers}
-    , scientific
+    aeson,
+    ondim:{ondim, ondim-whiskers},
+    scientific,
 
   exposed-modules:
     Ondim.Extra.BindJSON
@@ -125,17 +120,17 @@ library ondim-json
     Ondim.Targets.Aeson.Instances
 
 library ondim-html
-  import:          common
-  visibility:      public
-  hs-source-dirs:  ondim-html/src
+  import: common
+  visibility: public
+  hs-source-dirs: ondim-html/src
   build-depends:
-    , conduit
-    , containers
-    , html-conduit                   >=1.3.2.1 && <1.4
-    , lucid
-    , ondim:{ondim, ondim-whiskers}
-    , xml-conduit                    >=1.9.0   && <1.10
-    , xml-types
+    conduit,
+    containers,
+    html-conduit >=1.3.2.1 && <1.4,
+    lucid,
+    ondim:{ondim, ondim-whiskers},
+    xml-conduit >=1.9.0 && <1.10,
+    xml-types,
 
   exposed-modules:
     Ondim.Targets.HTML

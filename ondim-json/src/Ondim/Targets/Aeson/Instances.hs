@@ -67,7 +67,7 @@ instance OndimNode AesonNode where
     _ -> Nothing
   children = \case
     (Object' o)
-      | Just (Array' a) <- L.lookup "$children" o -> a
+      | Just (Array' a) <- L.lookup "children" o -> a
     _ -> mempty
   attributes (Object' o) = mapMaybeM go $ M.toPairs o
     where

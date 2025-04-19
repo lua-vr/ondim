@@ -7,27 +7,39 @@ module Ondim.Loading
   ( loadTemplates,
     loadTemplatesDynamic,
     loadTemplatesEmbed,
+
     -- * \"Advanced\" usage
+
     --
+
     -- | There are default 'LoadConfig's inside each target's respective
     -- modules, but you can also use the definitions below to customize them if
     -- you wish.
     LoadConfig (..),
     LoadFn,
     loadFnSimple,
-    TemplateLoadingException (..)
+    TemplateLoadingException (..),
   ) where
 
 import Control.Exception (throw)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Logger (MonadLogger, runNoLoggingT)
 import Data.Map ((!))
 import Ondim
-import Ondim.Debug
+  ( NamespaceItem (TemplateData),
+    OndimNode,
+    OndimState (expansions),
+    delete,
+    insert,
+  )
+import Ondim.Internal.Basic (fileSite)
 import Relude.Extra (minimumOn1, toPairs)
 import System.FilePath (splitDirectories, (</>))
 import System.FilePattern (FilePattern, matchMany)
 import System.UnionMount
+  ( Change,
+    FileAction (Delete, Refresh),
+    Logger,
+    unionMount,
+  )
 
 -- | Some template loading (impure) exception.
 newtype TemplateLoadingException = TemplateLoadingException String
@@ -61,13 +73,13 @@ loadFnToUpdate fn fp name bs s =
 
 -- | Configuration for loading templates of a specific type.
 data LoadConfig n = LoadConfig
-  { patterns :: [FilePattern],
-    -- ^ Glob patterns to search for files.
+  { -- | Glob patterns to search for files.
+    patterns :: [FilePattern],
+    -- | Recipe to load the templates.
     loadFn :: LoadFn n,
-    -- ^ Recipe to load the templates.
-    initialState :: OndimState n
-    -- ^ Initial state. You can use this to set some default expansions or
+    -- | Initial state. You can use this to set some default expansions or
     -- templates that may be overshadowed by file templates.
+    initialState :: OndimState n
   }
 
 {- | Load templates from a list of directories in descending order of priority,
@@ -75,21 +87,22 @@ data LoadConfig n = LoadConfig
    update the state when templates get updated on disk.
 -}
 loadTemplatesDynamic ::
-  forall m n.
-  (MonadLogger m, MonadIO m, MonadUnliftIO m) =>
+  forall n.
   -- | Loading configurations
   [LoadConfig n] ->
   -- | Places to look for templates and their (optional) mount point,
   -- in descending order of priority.
   [(FilePath, Maybe FilePath)] ->
-  m (OndimState n, (OndimState n -> m ()) -> m ())
-loadTemplatesDynamic cfgs places =
+  -- | Logger
+  Logger ->
+  IO (OndimState n, (OndimState n -> IO ()) -> IO ())
+loadTemplatesDynamic cfgs places logger =
   let sources = fromList (zip (zip [1 ..] (fst <$> places)) places)
       cfgMap = fromList $ [(i, f) | (i, loadFn -> f) <- zip [1 ..] cfgs]
       patts = [(i, p) | (i, patterns -> ps) <- zip [1 ..] cfgs, p <- ps]
       exclude = []
       initial = foldMap' initialState cfgs
-      handler :: Change (Int, FilePath) Int -> m (OndimState n -> OndimState n)
+      handler :: Change (Int, FilePath) Int -> IO (OndimState n -> OndimState n)
       handler chg =
         appEndo . mconcat . coerce . join
           <$> forM (toPairs chg) \(i, chg') ->
@@ -101,11 +114,11 @@ loadTemplatesDynamic cfgs places =
                           fp = dir </> file
                        in readFileLBS fp <&> loadFnToUpdate (cfgMap ! i) fp name
                     Delete -> pure \s -> s {expansions = delete name (expansions s)} <> initial
-   in unionMount sources patts exclude initial handler
+   in unionMount sources patts exclude initial logger handler
 
 -- | Load templates from a list of directories in descending order of priority.
-loadTemplates :: [LoadConfig n] -> [(FilePath, Maybe FilePath)] -> IO (OndimState n)
-loadTemplates cfgs dirs = fst <$> runNoLoggingT (loadTemplatesDynamic cfgs dirs)
+loadTemplates :: [LoadConfig n] -> [(FilePath, Maybe FilePath)] -> Logger -> IO (OndimState n)
+loadTemplates cfgs dirs logger = fst <$> loadTemplatesDynamic cfgs dirs logger
 
 {- | Load templates in pure code from a list of filepaths and bytestrings. Meant
    to be used with the @file-embed@ package.
