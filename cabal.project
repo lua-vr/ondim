@@ -3,4 +3,4 @@ packages: .
 source-repository-package
   type: git
   location: https://github.com/estradilua/unionmount-co-log.git
-  tag: f9323877ab4d61205f38c772b08418a8d2d71b24
+  tag: 7eb8dbfd59f817b021ebbdd3ea0c5bc9da0155f1
