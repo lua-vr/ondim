@@ -16,7 +16,7 @@ jobs:
         ghc: ['9.6', '9.8', '9.10']
         cabal: ['3.12']
         include:
-          - ghc: '9.8'
+          - ghc: '9.10'
             cabal: '3.12'
             haddock: true
     steps:
@@ -88,7 +88,7 @@ jobs:
       # Cache dependencies already here, so that we do not have to rebuild them should the subsequent steps fail.
       - name: Save cached dependencies (oldest)
         uses: actions/cache/save@v3
-        if: ${{ always() && steps.cache.outputs.cache-primary-key != steps.cache2.outputs.cache-matched-key }}
+        if: ${{ always() && steps.cache2.outputs.cache-primary-key != steps.cache2.outputs.cache-matched-key }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache2.outputs.cache-primary-key }}
@@ -98,6 +98,16 @@ jobs:
 
       - name: Run tests (oldest)
         run: cabal test all
+
+      - name: Restore cached dependencies (haddocks)
+        uses: actions/cache/restore@v3
+        id: cache3
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-${{ env.GHC_VERSION }}-cabal-${{ env.CABAL_VERSION }}-haddock-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-${{ env.GHC_VERSION }}-cabal-${{ env.CABAL_VERSION }}-haddock-
+        if: ${{ matrix.haddock }}
 
       - name: Build haddocks
         run: |
@@ -110,4 +120,12 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy haddocks --project-name=ondim
+        if: ${{ matrix.haddock }}
+
+      - name: Save cached dependencies (oldest)
+        uses: actions/cache/save@v3
+        if: ${{ always() && steps.cache3.outputs.cache-primary-key != steps.cache3.outputs.cache-matched-key }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache3.outputs.cache-primary-key }}
         if: ${{ matrix.haddock }}
