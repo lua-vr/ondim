@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        ghc: ['9.6', '9.8', '9.10']
+        ghc: ['9.8', '9.10']
         cabal: ['3.12']
         include:
           - ghc: '9.10'
