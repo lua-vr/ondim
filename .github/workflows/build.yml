@@ -124,8 +124,7 @@ jobs:
 
       - name: Save cached dependencies (oldest)
         uses: actions/cache/save@v3
-        if: ${{ always() && steps.cache3.outputs.cache-primary-key != steps.cache3.outputs.cache-matched-key }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache3.outputs.cache-primary-key }}
-        if: ${{ matrix.haddock }}
+        if: ${{ always() && matrix.haddock && steps.cache3.outputs.cache-primary-key != steps.cache3.outputs.cache-matched-key }}
