@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeAbstractions #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ondim.Internal.Core
@@ -8,7 +9,6 @@ module Ondim.Internal.Core
     getTemplate,
     getNamespace,
     getText,
-
     -- Exceptions
     withoutNBErrors,
     withNBErrors,
@@ -19,6 +19,7 @@ module Ondim.Internal.Core
     throwExpFailure,
   ) where
 
+import Control.Monad.Except (MonadError (..))
 import Data.Bitraversable (bimapM)
 import Data.HashMap.Strict qualified as HMap
 import Data.Typeable (eqT, (:~:) (..))
@@ -27,7 +28,6 @@ import Ondim.Internal.Class
 import Ondim.State
 import Type.Reflection (SomeTypeRep, someTypeRep)
 import Prelude hiding (All)
-import Control.Monad.Except (MonadError(..))
 
 -- Get stuff from state
 
