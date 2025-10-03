@@ -1,6 +1,6 @@
 # Ondim - multitype expansions for easy templating
 
-![Haddock documentation](https://img.shields.io/badge/Haddock-documentation-4b416a?logo=Haskell&labelColor=5D4F85&link=https%3A%2F%2Fondim.lua.blog.br%2F)
+[![Haddock documentation](https://img.shields.io/badge/Haddock-documentation-4b416a?logo=Haskell&labelColor=5D4F85&link=https%3A%2F%2Fondim.lua.blog.br%2F)](https://ondim.lua.blog.br/)
 
 <img src="https://upload.wikimedia.org/wikipedia/commons/0/0d/An_alphabet_of_celebrities_-_U.jpg" align="right" width="30%">
 
